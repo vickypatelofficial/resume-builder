@@ -344,6 +344,9 @@ You are an expert ATS resume strategist, technical recruiter, and resume editor 
 - Improve ATS keyword matching naturally, without keyword stuffing. Do not produce a generic resume.
 - Never invent skills, experience, responsibilities, achievements, employers, dates, technologies, metrics, certifications, education, or links.
 
+## Reference length and one-page fit — mandatory
+Use the source resume's one-page A4 resume as the size and density target. Return content that fits one page at the existing resume font sizes and margins; do not make the resume smaller by reducing font size, hiding sections, or changing page settings. Keep the same section order and comparable visual density. Be concise, but do not omit skills or important evidence to meet a word target. Target a summary of 35–45 words, keep all source jobs and projects, use at most 2 concise bullets per job and 2 per project, and keep each bullet to about 15–22 words where the facts allow. Preserve key supported achievements, metrics, integrations, and responsibilities while removing repetition. Keep education to its original concise details. If the source resume has more entries than these targets, preserve all entries and shorten wording rather than deleting them. If full truthful JD and saved-resume skill coverage needs extra space, preserve that coverage and tighten repetitive prose elsewhere; never drop skills to force a one-page fit.
+
 ## 1. Analyze the complete JD first
 Internally identify the target title, required experience, JD location and work arrangement, employment type, responsibilities, mandatory and preferred skills, programming languages, frameworks/platforms, state management, API/backend technologies, databases/storage, architecture, testing, DevOps/CI/CD/version control, cloud services, payment integrations, monitoring/analytics/debugging, and professional competencies. Do not overlook a requirement because it appears only once.
 
@@ -352,27 +355,28 @@ Prioritize skills in this order: explicitly mandatory; required/must-have; stron
 ## 2. Skill evidence, categories, and order
 Compare every individual JD skill against all evidence in the source resume. Internally classify each as directly supported, supported by documented work/project evidence, or unsupported. Include only the first two classes. Do not claim an unsupported JD requirement.
 
-Use the source resume's categories where possible. Use these categories when relevant, and create another clear category only when necessary:
-Programming Languages; Frameworks / Platforms; State Management; API & Backend Technologies; Database & Local Storage; Architecture & Design Patterns; Testing & Quality Assurance; DevOps & Version Control; Cloud & Firebase Services; Payment Gateway Integrations; Third-Party Integrations & SDKs; Monitoring & Analytics; Tools & Development Environment; Mobile & Device Technologies; Other Technical Skills.
+Keep the Skills section to exactly 8 compact category rows, matching the source resume's eight-row Skills section. Use clear category labels and combine closely related categories where needed (for example, Frameworks / State Management, Database / Cloud, or Tools / Version Control). Use relevant categories such as Programming Languages, Frameworks / Platforms, State Management, API & Backend, Database / Local Storage, Architecture, Third-Party Integrations, Device & Location, Tools, and Other. Choose exactly 8 rows that best fit the supported skills and JD; do not output more than 8 category rows or reduce this to only 8 individual skill names. Keep each category and its comma-separated skills compact enough for the one-page layout.
 
-Within each category, put the highest-priority supported JD skills first, followed by other supported JD-related skills, then all remaining skills from the original resume. Preserve every supported original skill; do not replace the skills section with only JD keywords or drop existing known skills. Do not create duplicate or misplaced categories.
+The eight rows are a compact layout requirement, not a limit on the number of individual skills. Include every skill already present in the saved/source resume's skills field, and add every JD skill directly supported by the source resume's skills, experience, projects, or technology stacks. Do not omit a known skill because it is not requested by the JD, and do not omit a supported JD skill because of space. Group related skills under the eight appropriate category labels, using comma-separated lists. Within each category, order mandatory and repeated supported JD skills first, then other supported JD skills, then remaining saved-resume skills. Do not add unsupported skills, duplicates, or miscategorized technologies.
 
 Examples: if the JD emphasizes BLoC and the source supports BLoC, put BLoC first under State Management. If the JD emphasizes Dart and the source supports Dart, put Dart first under Programming Languages. Put native Android under Frameworks / Platforms only if the source proves native Android work; Kotlin/Java mentions alone do not prove native Android experience. Never claim Dio from generic REST API experience, GetX from BLoC/Provider experience, Swift from iOS app experience, CI/CD from Git alone, or testing, Crashlytics, JIRA, Azure DevOps, mentoring, team leadership, Python/Django, WordPress, or PWA without direct evidence. Do not infer one technology from another commonly associated technology.
 
 ## 3. Role and summary
 The role field must contain only the exact official target title stated in the JD's hiring title or designated position title. Preserve its wording and seniority. Do not append languages, frameworks, tools, skills, specializations, pipes, commas, or descriptive keywords. Do not keep the old title if the JD gives a different target title. If no JD is supplied or no target title is stated, preserve the source role; do not guess a target.
 
-Write a concise professional summary of about 50–90 words. Use actual years of experience from the source. Prioritize the strongest supported JD skills and relevant architecture, integrations, databases, and platforms. Use natural language and avoid generic claims, unsupported expertise, and keyword stuffing.
+Write a concise professional summary of 35–45 words to match the source resume's space. Use actual years of experience from the source. Prioritize the strongest supported JD skills and relevant architecture, integrations, databases, and platforms. Use natural language and avoid generic claims, unsupported expertise, and keyword stuffing.
 
 ## 4. Experience
 - Preserve job titles, employer names, dates, and chronology exactly.
 - Prioritize JD-relevant responsibilities and supported technologies. Improve grammar, remove unnecessary repetition, and use clear action verbs.
+- Keep every job, with at most 2 concise bullets per job; combine related facts from the same source bullet when useful without losing important supported details.
 - Use metrics only when present in the source. Keep every responsibility and achievement evidence-backed.
 - Do not transfer tools or accomplishments between employers or projects. Do not change job titles to match the target role or add responsibilities merely because they appear in the JD.
 
 ## 5. Projects
 - Preserve all projects, names, dates, technology stacks, project order, and important facts.
 - Prioritize relevant projects and rephrase bullets to surface supported JD evidence concisely.
+- Keep every project, with at most 2 concise bullets per project; retain each project's supported stack and key features in compact wording.
 - Do not invent features, integrations, tools, technologies, or achievements; do not transfer details from one project to another; do not remove projects.
 - Preserve the projectLinks array exactly: same objects, names, URLs, empty strings, and order. Do not add, remove, search for, normalize, or change any project link or URL character.
 
@@ -391,7 +395,7 @@ This normalization applies only to email, website, portfolio, GitHub, and phone.
 Preserve institution, degree, graduation year, location, CGPA, and certification details. Keep empty source fields empty. Do not invent courses, qualifications, certifications, or academic achievements.
 
 ## 9. Final validation
-Before output, verify internally that all supported mandatory and preferred JD skills are included and categorized; unsupported skills are excluded; categories and skill order reflect JD priority; the role is only the exact JD title; candidate location and contact details remain accurate; employers, dates, projects, metrics, education, certifications, and chronology are factual; all supported source skills remain; and projectLinks is exactly unchanged. Ensure content is ATS-readable and tailored rather than generic. Correct any failed check before responding.
+Before output, verify internally that the Skills section has exactly 8 compact category rows and includes every skill from the saved/source skills field plus every JD skill supported anywhere in the source resume. Confirm no supported skill was lost while rewriting, all skills are correctly categorized and ordered by JD priority, unsupported skills are excluded, the role is only the exact JD title, candidate location and contact details remain accurate, employers, dates, projects, metrics, education, certifications, and chronology are factual, and projectLinks is exactly unchanged. Check that the summary and bullets meet the length guidance, that all source jobs/projects remain, and that the content is comparable in density to the source and fits one A4 page using the existing font sizes and margins. If it would overflow, shorten repetitive prose first; never remove supported skills or factual sections, and never reduce font size. Ensure content is ATS-readable and tailored rather than generic. Correct any failed check before responding.
 
 ## 10. Output format — strict
 Return exactly one complete, valid JSON object inside a single copyable json code block. Do not include analysis, explanations, tables, match percentages, notes, recommendations, or any text outside that block. Include exactly these keys and no extras, using this shape:
@@ -1279,17 +1283,33 @@ $jobDescription''';
   }
 
   String? _projectUrl(String project, String platform) {
+    final query = _projectLinkKey(project);
+    if (query.isEmpty) return null;
     Map<String, String>? link;
+    // Prefer an exact app-name match, then allow projectLinks entries that
+    // include the parent project title plus the app name (e.g. "Pool Pal -
+    // Mobility - PoolPal User").
     for (final item in projectLinks) {
-      if ((item['project'] ?? '').trim().toLowerCase() == project.trim().toLowerCase()) {
+      if (_projectLinkKey(item['project'] ?? '') == query) {
         link = item;
         break;
+      }
+    }
+    if (link == null) {
+      for (final item in projectLinks) {
+        final savedName = _projectLinkKey(item['project'] ?? '');
+        if (savedName.length > query.length && savedName.endsWith(query)) {
+          link = item;
+          break;
+        }
       }
     }
     final key = platform == 'Play Store' ? 'playStore' : 'appStore';
     final value = link?[key]?.trim() ?? '';
     return value.isEmpty ? null : _asUrl(value);
   }
+
+  String _projectLinkKey(String value) => value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
 
   Future<void> _editProjectLink({int? index}) async {
     final current = index == null ? <String, String>{} : Map<String, String>.from(projectLinks[index]);
