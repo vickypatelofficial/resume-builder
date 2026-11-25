@@ -143,6 +143,8 @@ class _ResumeHomeState extends State<ResumeHome> {
   final secureStorage = const FlutterSecureStorage();
   final controllers = <String, TextEditingController>{};
   List<Map<String, String>> projectLinks = [];
+  List<List<_PdfPreviewLink>> _pdfPreviewLinks = [];
+  String _pdfPreviewLinksSignature = '';
   bool loaded = false, saving = false;
   bool isTemporaryResume = false;
   bool firstRunDialogShown = false;
@@ -1156,8 +1158,46 @@ $jobDescription''';
   }
 
   Future<void> _openLink(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri != null && uri.hasScheme) await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final uri = Uri.tryParse(_asUrl(url.trim()));
+    if (uri == null || !{'http', 'https'}.contains(uri.scheme.toLowerCase())) return;
+    try {
+      final opened = await launchUrl(
+        uri,
+        mode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+        webOnlyWindowName: kIsWeb ? '_blank' : null,
+      );
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open this link. Check your browser settings and try again.')));
+      }
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open this link. Check your browser settings and try again.')));
+    }
+  }
+
+  Future<Uint8List> _buildPreviewPdf() async {
+    final document = _buildPdfDocument();
+    final bytes = await document.save();
+    final linksByPage = document.document.pdfPageList.pages.map((page) => page.annotations
+        .where((annotation) => annotation.annot is PdfAnnotUrlLink)
+        .map((annotation) {
+          final link = annotation.annot as PdfAnnotUrlLink;
+          return _PdfPreviewLink(
+            url: link.url,
+            rect: link.rect,
+            pageWidth: page.pageFormat.width,
+            pageHeight: page.pageFormat.height,
+          );
+        })
+        .toList(growable: false)).toList(growable: false);
+    final signature = linksByPage.asMap().entries.expand((entry) => entry.value.map((link) =>
+        '${entry.key}:${link.url}:${link.rect.left}:${link.rect.bottom}:${link.rect.width}:${link.rect.height}:${link.pageWidth}:${link.pageHeight}')).join('|');
+    if (signature != _pdfPreviewLinksSignature) {
+      _pdfPreviewLinksSignature = signature;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _pdfPreviewLinks = linksByPage);
+      });
+    }
+    return bytes;
   }
 
   String _asUrl(String value) => value.startsWith('http') ? value : 'https://$value';
@@ -2154,7 +2194,7 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
           const SizedBox(height: 14),
           Expanded(
             child: PdfPreview.builder(
-              build: (_) => _buildPdfDocument().save(),
+              build: (_) => _buildPreviewPdf(),
               initialPageFormat: const PdfPageFormat(595.5, 842),
               pageFormats: const {'A4': PdfPageFormat(595.5, 842)},
               canChangePageFormat: false,
@@ -2178,16 +2218,41 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
                   return Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 595.5),
-                      child: Container(
-                        color: Colors.white,
-                        child: AspectRatio(
-                          aspectRatio: page.aspectRatio,
+                      child: LayoutBuilder(builder: (context, constraints) {
+                        final pageWidth = constraints.maxWidth;
+                        final pageHeight = pageWidth / page.aspectRatio;
+                        final pageLinks = index < _pdfPreviewLinks.length
+                            ? _pdfPreviewLinks[index]
+                            : const <_PdfPreviewLink>[];
+                        return SizedBox(
+                          width: pageWidth,
+                          height: pageHeight,
                           child: ColoredBox(
                             color: Colors.white,
-                            child: Image(image: page.image, fit: BoxFit.fill),
+                            child: Stack(children: [
+                              Positioned.fill(child: Image(image: page.image, fit: BoxFit.fill)),
+                              for (final link in pageLinks)
+                                Positioned(
+                                  left: link.rect.left * pageWidth / link.pageWidth,
+                                  top: (link.pageHeight - link.rect.top) * pageHeight / link.pageHeight,
+                                  width: link.rect.width * pageWidth / link.pageWidth,
+                                  height: link.rect.height * pageHeight / link.pageHeight,
+                                  child: Tooltip(
+                                    message: 'Open link',
+                                    child: MouseRegion(
+                                      cursor: SystemMouseCursors.click,
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: () => _openLink(link.url),
+                                        child: const SizedBox.expand(),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ]),
                           ),
-                        ),
-                      ),
+                        );
+                      }),
                     ),
                   );
                 },
@@ -2366,6 +2431,15 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
         else if (key == 'education') _previewEducation()
         else _previewEntries(key),
       ]));
+}
+
+class _PdfPreviewLink {
+  const _PdfPreviewLink({required this.url, required this.rect, required this.pageWidth, required this.pageHeight});
+
+  final String url;
+  final PdfRect rect;
+  final double pageWidth;
+  final double pageHeight;
 }
 
 class _ProjectEditorResult {
