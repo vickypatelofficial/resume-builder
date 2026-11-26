@@ -1908,13 +1908,15 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
     for (var i = 0; i < availableLinks.length; i++) {
       if (i > 0) widgets.add(pw.Text(', ', style: pw.TextStyle(font: regular, fontSize: style.descriptionSize)));
       final link = availableLinks[i];
-      widgets.add(pw.Text('${link.platform}: ', style: pw.TextStyle(font: bold, fontSize: style.descriptionSize)));
-      final label = pw.Text(
-        link.name,
-        style: pw.TextStyle(font: regular, fontSize: style.descriptionSize, decoration: pw.TextDecoration.underline, decorationColor: PdfColor.fromInt(0xff414141)),
-      );
       final url = _projectUrl(link.name, link.platform);
-      if (url != null) widgets.add(pw.UrlLink(destination: url, child: label));
+      if (url == null) continue;
+      widgets.add(pw.UrlLink(
+        destination: url,
+        child: pw.RichText(text: pw.TextSpan(style: pw.TextStyle(font: regular, fontSize: style.descriptionSize), children: [
+          pw.TextSpan(text: '${link.platform}: ', style: pw.TextStyle(font: bold)),
+          pw.TextSpan(text: link.name, style: pw.TextStyle(decoration: pw.TextDecoration.underline, decorationColor: PdfColor.fromInt(0xff414141))),
+        ])),
+      ));
     }
     return pw.Padding(padding: const pw.EdgeInsets.only(left: 12, top: 1), child: pw.Wrap(children: widgets));
   }
