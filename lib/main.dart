@@ -1622,7 +1622,12 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
   Future<void> _export() async {
     await _save();
     final pdf = _buildPdfDocument();
-    await Printing.layoutPdf(onLayout: (_) async => pdf.save(), name: '${data.name.trim().isEmpty ? 'Resume' : data.name.trim().replaceAll(' ', '_')}_Resume.pdf');
+    final filename = '${data.name.trim().isEmpty ? 'Resume' : data.name.trim().replaceAll(' ', '_')}_Resume.pdf';
+    if (kIsWeb) {
+      await Printing.sharePdf(bytes: await pdf.save(), filename: filename);
+    } else {
+      await Printing.layoutPdf(onLayout: (_) async => pdf.save(), name: filename);
+    }
   }
 
   Future<void> _showEmailResumeDialog() async {
