@@ -1174,7 +1174,7 @@ $jobDescription''';
     }
   }
 
-  Future<Uint8List> _buildPreviewPdf() async {
+  Future<Uint8List> _buildResumePdfBytes() async {
     final document = _buildPdfDocument();
     final bytes = await document.save();
     final linksByPage = document.document.pdfPageList.pages.map((page) => page.annotations
@@ -1479,6 +1479,27 @@ $jobDescription''';
     return tokens;
   }
 
+  List<({String platform, String name})> _projectStoreTokensForEntry(String title, List<String> lines, {String entryText = ''}) {
+    final tokens = _projectStoreTokens(lines);
+    // Saved links may be keyed by the project title or by an app name that
+    // appears in its details. Render those links even without store label lines.
+    final searchableEntry = _projectLinkKey('$title $entryText');
+    for (final item in projectLinks) {
+      final name = (item['project'] ?? '').trim();
+      final key = _projectLinkKey(name);
+      if (key.length < 4 || (!searchableEntry.contains(key) && key != _projectLinkKey(title))) continue;
+      if (tokens.isNotEmpty && key == _projectLinkKey(title)) continue;
+      for (final (platform, field) in [('Play Store', 'playStore'), ('App Store', 'appStore')]) {
+        final url = item[field]?.trim() ?? '';
+        if (url.isEmpty) continue;
+        if (!tokens.any((token) => token.platform == platform && _projectLinkKey(token.name) == key)) {
+          tokens.add((platform: platform, name: name));
+        }
+      }
+    }
+    return tokens;
+  }
+
   String _bulkStoreLinksPrompt() {
     final entries = _projectEntries;
     final allowedNames = <String>[];
@@ -1621,12 +1642,12 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
 
   Future<void> _export() async {
     await _save();
-    final pdf = _buildPdfDocument();
+    final bytes = await _buildResumePdfBytes();
     final filename = '${data.name.trim().isEmpty ? 'Resume' : data.name.trim().replaceAll(' ', '_')}_Resume.pdf';
     if (kIsWeb) {
-      await Printing.sharePdf(bytes: await pdf.save(), filename: filename);
+      await Printing.sharePdf(bytes: bytes, filename: filename);
     } else {
-      await Printing.layoutPdf(onLayout: (_) async => pdf.save(), name: filename);
+      await Printing.layoutPdf(onLayout: (_) async => bytes, name: filename);
     }
   }
 
@@ -1857,7 +1878,7 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
         ]),
       ];
       final storeLines = project ? lines.skip(1).where(_isProjectStoreLine).toList() : <String>[];
-      final storeTokens = _projectStoreTokens(storeLines);
+      final storeTokens = project ? _projectStoreTokensForEntry(title, storeLines, entryText: lines.skip(1).join(' ')) : <({String platform, String name})>[];
       if (storeTokens.isNotEmpty) content.add(_pdfProjectStoreRow(storeTokens, regular, bold));
       for (final line in lines.skip(1)) {
         if (project && _isProjectStoreLine(line)) continue;
@@ -1908,22 +1929,30 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
   }
 
   pw.Widget _pdfProjectStoreRow(List<({String platform, String name})> links, pw.Font regular, pw.Font bold) {
-    final widgets = <pw.Widget>[];
-    final availableLinks = links.where((link) => _projectUrl(link.name, link.platform) != null).toList();
-    for (var i = 0; i < availableLinks.length; i++) {
-      if (i > 0) widgets.add(pw.Text(', ', style: pw.TextStyle(font: regular, fontSize: style.descriptionSize)));
-      final link = availableLinks[i];
-      final url = _projectUrl(link.name, link.platform);
-      if (url == null) continue;
-      widgets.add(pw.UrlLink(
-        destination: url,
-        child: pw.RichText(text: pw.TextSpan(style: pw.TextStyle(font: regular, fontSize: style.descriptionSize), children: [
-          pw.TextSpan(text: '${link.platform}: ', style: pw.TextStyle(font: bold)),
-          pw.TextSpan(text: link.name, style: pw.TextStyle(decoration: pw.TextDecoration.underline, decorationColor: PdfColor.fromInt(0xff414141))),
-        ])),
+    final children = <pw.Widget>[];
+    for (final platform in ['Play Store', 'App Store']) {
+      final platformLinks = links.where((link) => link.platform == platform && _projectUrl(link.name, platform) != null).toList();
+      if (platformLinks.isEmpty) continue;
+      children.add(pw.Padding(
+        padding: pw.EdgeInsets.only(left: children.isEmpty ? 0 : 8),
+        child: pw.Text('$platform: ', style: pw.TextStyle(font: bold, fontSize: style.descriptionSize)),
       ));
+      for (var i = 0; i < platformLinks.length; i++) {
+        if (i > 0) children.add(pw.Text(', ', style: pw.TextStyle(font: regular, fontSize: style.descriptionSize)));
+        final link = platformLinks[i];
+        final url = _projectUrl(link.name, platform)!;
+        children.add(pw.UrlLink(
+          destination: url,
+          child: pw.Text(link.name, style: pw.TextStyle(
+            font: bold,
+            fontSize: style.descriptionSize,
+            decoration: pw.TextDecoration.underline,
+            decorationColor: PdfColor.fromInt(0xff414141),
+          )),
+        ));
+      }
     }
-    return pw.Padding(padding: const pw.EdgeInsets.only(left: 12, top: 1), child: pw.Wrap(children: widgets));
+    return pw.Padding(padding: const pw.EdgeInsets.only(left: 12, top: 1), child: pw.Wrap(children: children));
   }
 
   pw.Widget _pdfGitHubRow(pw.Font regular, pw.Font bold) => pw.Padding(
@@ -2201,7 +2230,7 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
           const SizedBox(height: 14),
           Expanded(
             child: PdfPreview.builder(
-              build: (_) => _buildPreviewPdf(),
+              build: (_) => _buildResumePdfBytes(),
               initialPageFormat: const PdfPageFormat(595.5, 842),
               pageFormats: const {'A4': PdfPageFormat(595.5, 842)},
               canChangePageFormat: false,
@@ -2288,7 +2317,7 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
         if (heading.date.isNotEmpty) SizedBox(width: 115, child: Text(heading.date, textAlign: TextAlign.right, style: TextStyle(fontFamily: 'serif', fontSize: style.subheadingSize, fontWeight: FontWeight.w700))),
       ]));
       final storeLines = lines.skip(1).where(_isProjectStoreLine).toList();
-      final storeTokens = _projectStoreTokens(storeLines);
+      final storeTokens = _projectStoreTokensForEntry(heading.title, storeLines, entryText: lines.skip(1).join(' '));
       if (storeTokens.isNotEmpty) widgets.add(_previewProjectStoreRow(storeTokens));
       for (final line in lines.skip(1)) {
         if (_isProjectStoreLine(line)) {
@@ -2319,15 +2348,20 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
 
   Widget _previewProjectStoreRow(List<({String platform, String name})> links) {
     final children = <Widget>[];
-    final availableLinks = links.where((link) => _projectUrl(link.name, link.platform) != null).toList();
-    for (var i = 0; i < availableLinks.length; i++) {
-      if (i > 0) children.add(Text(', ', style: TextStyle(fontFamily: 'serif', fontSize: style.descriptionSize)));
-      final link = availableLinks[i];
-      children.add(Text('${link.platform}: ', style: TextStyle(fontFamily: 'serif', fontSize: style.descriptionSize, fontWeight: FontWeight.w700)));
-      final url = _projectUrl(link.name, link.platform);
-      if (url != null) children.add(_previewLink(link.name, url));
+    for (final platform in ['Play Store', 'App Store']) {
+      final platformLinks = links.where((link) => link.platform == platform && _projectUrl(link.name, platform) != null).toList();
+      if (platformLinks.isEmpty) continue;
+      children.add(Padding(
+        padding: EdgeInsets.only(left: children.isEmpty ? 0 : 8),
+        child: Text('$platform: ', style: TextStyle(fontFamily: 'serif', fontSize: style.descriptionSize, fontWeight: FontWeight.w700)),
+      ));
+      for (var i = 0; i < platformLinks.length; i++) {
+        if (i > 0) children.add(Text(', ', style: TextStyle(fontFamily: 'serif', fontSize: style.descriptionSize)));
+        final link = platformLinks[i];
+        children.add(_previewLink(link.name, _projectUrl(link.name, platform)!));
+      }
     }
-    if (availableLinks.isEmpty) return const SizedBox.shrink();
+    if (children.isEmpty) return const SizedBox.shrink();
     return Padding(padding: const EdgeInsets.only(left: 12, top: 1), child: Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: children));
   }
 
