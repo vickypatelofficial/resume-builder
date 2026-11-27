@@ -1339,13 +1339,12 @@ $jobDescription''';
       }
     }
     if (link == null) {
-      for (final item in projectLinks) {
+      final matches = projectLinks.where((item) {
         final savedName = _projectLinkKey(item['project'] ?? '');
-        if (savedName.length > query.length && savedName.endsWith(query)) {
-          link = item;
-          break;
-        }
-      }
+        return savedName.length >= 4 && (savedName.contains(query) || query.contains(savedName));
+      }).toList()
+        ..sort((a, b) => _projectLinkKey(b['project'] ?? '').length.compareTo(_projectLinkKey(a['project'] ?? '').length));
+      if (matches.isNotEmpty) link = matches.first;
     }
     final key = platform == 'Play Store' ? 'playStore' : 'appStore';
     final value = link?[key]?.trim() ?? '';
@@ -1490,7 +1489,7 @@ $jobDescription''';
     for (final item in projectLinks) {
       final name = (item['project'] ?? '').trim();
       final key = _projectLinkKey(name);
-      if (key.length < 4 || (!searchableEntry.contains(key) && key != _projectLinkKey(title))) continue;
+      if (key.isEmpty || (!searchableEntry.contains(key) && key != _projectLinkKey(title))) continue;
       if (tokens.isNotEmpty && key == _projectLinkKey(title)) continue;
       for (final (platform, field) in [('Play Store', 'playStore'), ('App Store', 'appStore')]) {
         final url = item[field]?.trim() ?? '';
@@ -1934,7 +1933,7 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
   pw.Widget _pdfProjectStoreRow(List<({String platform, String name})> links, pw.Font regular, pw.Font bold) {
     final children = <pw.Widget>[];
     for (final platform in ['Play Store', 'App Store']) {
-      final platformLinks = links.where((link) => link.platform == platform && _projectUrl(link.name, platform) != null).toList();
+      final platformLinks = links.where((link) => link.platform == platform).toList();
       if (platformLinks.isEmpty) continue;
       children.add(pw.Padding(
         padding: pw.EdgeInsets.only(left: children.isEmpty ? 0 : 8),
@@ -1943,16 +1942,14 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
       for (var i = 0; i < platformLinks.length; i++) {
         if (i > 0) children.add(pw.Text(', ', style: pw.TextStyle(font: regular, fontSize: style.descriptionSize)));
         final link = platformLinks[i];
-        final url = _projectUrl(link.name, platform)!;
-        children.add(pw.UrlLink(
-          destination: url,
-          child: pw.Text(link.name, style: pw.TextStyle(
-            font: bold,
-            fontSize: style.descriptionSize,
-            decoration: pw.TextDecoration.underline,
-            decorationColor: PdfColor.fromInt(0xff414141),
-          )),
+        final label = pw.Text(link.name, style: pw.TextStyle(
+          font: bold,
+          fontSize: style.descriptionSize,
+          decoration: pw.TextDecoration.underline,
+          decorationColor: PdfColor.fromInt(0xff414141),
         ));
+        final url = _projectUrl(link.name, platform);
+        children.add(url == null ? label : pw.UrlLink(destination: url, child: label));
       }
     }
     return pw.Padding(padding: const pw.EdgeInsets.only(left: 12, top: 1), child: pw.Wrap(children: children));
@@ -2352,7 +2349,7 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
   Widget _previewProjectStoreRow(List<({String platform, String name})> links) {
     final children = <Widget>[];
     for (final platform in ['Play Store', 'App Store']) {
-      final platformLinks = links.where((link) => link.platform == platform && _projectUrl(link.name, platform) != null).toList();
+      final platformLinks = links.where((link) => link.platform == platform).toList();
       if (platformLinks.isEmpty) continue;
       children.add(Padding(
         padding: EdgeInsets.only(left: children.isEmpty ? 0 : 8),
@@ -2361,7 +2358,10 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
       for (var i = 0; i < platformLinks.length; i++) {
         if (i > 0) children.add(Text(', ', style: TextStyle(fontFamily: 'serif', fontSize: style.descriptionSize)));
         final link = platformLinks[i];
-        children.add(_previewLink(link.name, _projectUrl(link.name, platform)!));
+        final url = _projectUrl(link.name, platform);
+        children.add(url == null
+            ? Text(link.name, style: TextStyle(fontFamily: 'serif', fontSize: style.descriptionSize, decoration: TextDecoration.underline))
+            : _previewLink(link.name, url));
       }
     }
     if (children.isEmpty) return const SizedBox.shrink();
