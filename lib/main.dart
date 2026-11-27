@@ -15,7 +15,7 @@ import 'resume_pdf_attachment.dart';
 
 const emailBackendTokenStorageKey = 'resume_email_backend_token_v1';
 const projectLinksStorageKey = 'resume_project_links_v1';
-const resumeStudioVersion = '1.0.1';
+const resumeStudioVersion = '1.0.2';
 const temporaryResumeStorageKey = 'resume_temporary_data_v1';
 const resumeSetupAiPrompt = '''I will paste my existing resume. First, extract its details and identify only the project/app names that appear in its Projects section. Before producing the final JSON, ask me one short question requesting the Play Store and/or App Store URLs needed for those exact names. Ask by project/app name in a concise list. Do not mention or ask about any other apps. Do not say that you captured or already received links. Wait for my URL reply before returning the final response.
 
@@ -335,87 +335,347 @@ class _ResumeHomeState extends State<ResumeHome> {
     final jdText = jobDescription.trim().isEmpty
         ? '[The complete job description will be pasted below this prompt]'
         : jobDescription.trim();
-    return '''# ATS-Optimized Resume Tailoring — Master Prompt (With Strict Data Validation)
+    const promptTemplate = r'''
+ATS-Optimized Resume Tailoring — Master Prompt (Strict JD Alignment + Complete Technical Experience + Data Validation)
+You are an expert ATS resume strategist, technical recruiter, and resume editor specializing in software development roles.
 
-You are an expert ATS resume strategist, technical recruiter, and resume editor specializing in software development roles. Create a temporary resume tailored specifically to the complete job description (JD), using the complete source resume JSON below.
-
-## Primary objective
-- Match the JD using factual details from the source resume and the candidate hands-on experience statement below.
-- Include every technical skill and technology required or preferred in the JD, because the candidate confirms having already worked with all JD-listed items.
+Your task is to create a temporary resume tailored specifically to the complete Job Description (JD), using the complete source resume JSON below.
+Primary Objective
+- Match the JD using factual details from the source resume and the candidate's explicit hands-on experience statement.
+- Include every technical skill and technology required or preferred in the JD because the candidate confirms having already worked with all JD-listed items.
 - Preserve every existing supported skill, even if it is not mentioned in the JD.
 - Organize skills into clear technical categories and prioritize mandatory and repeated JD requirements.
-- Improve ATS keyword matching naturally, without keyword stuffing. Do not produce a generic resume.
-- Do not invent employers, dates, specific duties, achievements, metrics, certifications, education, or links. Use the candidate's hands-on statement for JD technologies, but only place those technologies under a specific job or project when its existing context is relevant.
+- Improve ATS keyword matching naturally, without keyword stuffing.
+- Do not produce a generic resume.
+- STRICT REQUIREMENT: Tailor all four areas — Skills, Professional Experience, Project Tech Stack, and Project Description bullets.
+- Do not simply add JD keywords to the Skills section. Relevant technologies must also be reflected in appropriate experience bullets, project technology stacks, and project description bullets wherever the candidate's confirmed hands-on experience and existing context support them.
+- Do not leave relevant experience or project descriptions generic or unchanged when they can truthfully be improved using the candidate's confirmed hands-on experience.
+- Do not invent employers, dates, specific duties, achievements, metrics, certifications, education, project names, or links.
+- Use the candidate's hands-on statement for JD technologies, but only place those technologies under a specific job or project when its existing context is relevant.
+Candidate Hands-On Experience Statement
+The candidate explicitly states:
 
-## Candidate hands-on experience statement
-The candidate explicitly states: "I have already worked with all skills and technologies in the job description, and I want the relevant technology stacks, project descriptions, and experience tailored to reflect that work." Treat this as the candidate's confirmation of hands-on work with every skill and technology actually named in the supplied JD. Include every JD skill in the Skills section, even when the source resume does not document it. Tailor relevant existing experience bullets, project descriptions, and technology stacks to surface this candidate-confirmed work. Do not assign a JD technology to every job or project automatically; place it only where the existing role or project context is relevant. Do not invent employers, project names, dates, specific responsibilities, results, metrics, certifications, degrees, or qualifications. Do not infer related tools or adjacent expertise that are not named in the JD or source resume.
+"I have already worked with all skills and technologies in the job description, and I want the relevant technology stacks, project descriptions, and experience tailored to reflect that work."
 
-## Reference length and one-page fit — mandatory
-Use the source resume's one-page A4 resume as the size and density target. Return content that fits one page at the existing resume font sizes and margins; do not make the resume smaller by reducing font size, hiding sections, or changing page settings. Keep the same section order and comparable visual density. Be concise, but do not omit skills or important evidence to meet a word target. Target a summary of 35–45 words, keep all source jobs and projects, use at most 2 concise bullets per job and 2 per project, and keep each bullet to about 15–22 words where the facts allow. Preserve key supported achievements, metrics, integrations, and responsibilities while removing repetition. Keep education to its original concise details. If the source resume has more entries than these targets, preserve all entries and shorten wording rather than deleting them. If full truthful JD and saved-resume skill coverage needs extra space, preserve that coverage and tighten repetitive prose elsewhere; never drop skills to force a one-page fit.
+Treat this as the candidate's confirmation of hands-on work with every skill and technology actually named in the supplied JD.
 
-## 1. Analyze the complete JD first
-Internally identify the target title, required experience, JD location and work arrangement, employment type, responsibilities, mandatory and preferred skills, programming languages, frameworks/platforms, state management, API/backend technologies, databases/storage, architecture, testing, DevOps/CI/CD/version control, cloud services, payment integrations, monitoring/analytics/debugging, and professional competencies. Do not overlook a requirement because it appears only once.
+Rules:
+1. Include every JD skill in the Skills section, even when the source resume does not document it.
+2. Include every existing source-resume skill, even when the JD does not mention it.
+3. Tailor relevant existing experience bullets to demonstrate candidate-confirmed JD technology usage.
+4. Tailor relevant project technology stacks to include candidate-confirmed JD technologies.
+5. Rewrite relevant project description bullets to demonstrate practical implementation of candidate-confirmed JD technologies.
+6. Evaluate each job and project independently.
+7. Do not assign a JD technology to every job or project automatically.
+8. Do not invent specific responsibilities, features, outcomes, metrics, or technical implementations that are not supported by the JD confirmation and existing job/project context.
+9. Do not infer related tools or adjacent expertise that are not named in the JD or source resume.
+Important: Missing JD technologies in the original source resume are not a reason to exclude them from relevant experience or projects because the candidate explicitly confirms having worked with them.
+Reference Length and One-Page Fit — Mandatory
+Use the source resume's one-page A4 resume as the size and density target.
+- Return content that fits one page at the existing resume font sizes and margins.
+- Do not make the resume smaller by reducing font size, hiding sections, or changing page settings.
+- Keep the same section order and comparable visual density.
+- Be concise, but do not omit skills or important evidence to meet a word target.
+- Target a summary of 35–45 words.
+- Keep all source jobs and projects.
+- Use at most 2 concise bullets per job and 2 per project.
+- Keep each bullet to about 15–22 words where the facts allow.
+- Preserve key supported achievements, metrics, integrations, and responsibilities while removing repetition.
+- Keep education to its original concise details.
+- If the source resume has more entries than these targets, preserve all entries and shorten wording rather than deleting them.
+- If full truthful JD and saved-resume skill coverage needs extra space, preserve that coverage and tighten repetitive prose elsewhere.
+- Never drop skills to force a one-page fit.
+1. Analyze the Complete JD First
+Internally identify:
+- Target job title and required experience.
+- JD location and work arrangement.
+- Employment type.
+- Responsibilities and technical expectations.
+- Mandatory and preferred skills.
+- Programming languages.
+- Frameworks and platforms.
+- State management.
+- API and backend technologies.
+- Databases and local storage.
+- Architecture and design patterns.
+- Testing and debugging.
+- DevOps, CI/CD, and version control.
+- Cloud services.
+- Payment integrations.
+- Monitoring, analytics, and performance optimization.
+- Professional and communication competencies.
+Do not overlook a requirement because it appears only once.
 
-Prioritize skills in this order: explicitly mandatory; required/must-have; strong hands-on requirements; repeated skills; technologies tied to responsibilities; preferred skills; then other relevant skills.
+Prioritize skills in this order:
+1. Explicitly mandatory.
+2. Required / must-have.
+3. Strong hands-on requirements.
+4. Repeated skills.
+5. Technologies tied to responsibilities.
+6. Preferred skills.
+7. Other relevant skills.
+Use this analysis throughout Skills, Experience, Project Tech Stack, and Project Description sections.
+2. Skills — Complete Coverage and Eight Categories
+Compare every individual JD skill against the source resume.
 
-## 2. Skill evidence, categories, and order
-Compare every individual JD skill against the source resume. Treat the candidate hands-on experience statement above as direct confirmation that the candidate has worked with every skill and technology actually named in the JD. Include every such JD skill and every existing source-resume skill in the Skills section. Use the candidate's confirmation to tailor relevant existing experience and project descriptions, while preserving the source's employer, project, date, responsibility, and achievement facts. Do not imply a JD technology was used in every role or project; connect it only to relevant existing work, and do not infer adjacent skills absent from both the JD and source resume.
+Treat the candidate's hands-on experience statement as direct confirmation that the candidate has worked with every skill and technology actually named in the JD.
 
-Keep the Skills section to exactly 8 compact category rows, matching the source resume's eight-row Skills section. Use clear category labels and combine closely related categories where needed (for example, Frameworks / State Management, Database / Cloud, or Tools / Version Control). Use relevant categories such as Programming Languages, Frameworks / Platforms, State Management, API & Backend, Database / Local Storage, Architecture, Third-Party Integrations, Device & Location, Tools, and Other. Choose exactly 8 rows that best fit the supported skills and JD; do not output more than 8 category rows or reduce this to only 8 individual skill names. Keep each category and its comma-separated skills compact enough for the one-page layout.
+Include:
+- Every JD skill and technology.
+- Every existing source-resume skill.
+- No unsupported adjacent technologies.
+- No duplicate skills.
+Keep the Skills section to exactly 8 compact category rows, matching the source resume's eight-row Skills section.
 
-The eight rows are a compact layout requirement, not a limit on the number of individual skills. Include every skill already present in the saved/source resume's skills field and every skill or technology named in the JD, based on the candidate's hands-on experience statement. Do not omit a known skill because it is not requested by the JD, and do not omit a JD skill because the source resume does not mention it or because of space. Group related skills under the eight appropriate category labels, using comma-separated lists. Within each category, order mandatory and repeated JD skills first, then other JD skills, then remaining saved-resume skills. Do not add adjacent skills that are not named in the JD or source resume, duplicates, or miscategorized technologies.
+Use clear category labels and combine closely related categories where needed.
 
-Examples: if the JD emphasizes BLoC, put BLoC first under State Management; if it emphasizes Dart, put Dart first under Programming Languages. The candidate confirms hands-on work with technologies named in the JD, but this does not authorize adding related technologies that the JD does not name. Do not infer Dio from REST APIs, GetX from BLoC/Provider, Swift from iOS work, native Android from Kotlin/Java alone, or CI/CD from Git alone.
+Relevant categories may include:
+- Programming Languages.
+- Frameworks / Platforms.
+- State Management.
+- API & Backend.
+- Database / Local Storage.
+- Architecture.
+- Third-Party Integrations.
+- Device & Location.
+- Tools / Version Control.
+- Other.
+Choose exactly 8 rows that best fit the supported skills and JD.
 
-## 3. Role and summary
-The role field must contain only the exact official target title stated in the JD's hiring title or designated position title. Preserve its wording and seniority. Do not append languages, frameworks, tools, skills, specializations, pipes, commas, or descriptive keywords. Do not keep the old title if the JD gives a different target title. If no JD is supplied or no target title is stated, preserve the source role; do not guess a target.
+The eight rows are a compact layout requirement, not a limit on the number of individual skills.
 
-Write a concise professional summary of 35–45 words to match the source resume's space. Use actual years of experience from the source. Prioritize the strongest JD skills and technologies the candidate confirms having worked with, plus relevant architecture, integrations, databases, and platforms. Use natural language, do not inflate years or outcomes, and avoid keyword stuffing.
-
-## 4. Experience
+Within each category, order skills as follows:
+1. Mandatory and repeated JD skills.
+2. Other JD skills.
+3. Remaining saved-resume skills.
+Examples:
+- If the JD emphasizes BLoC, put BLoC first under State Management.
+- If the JD emphasizes Dart, put Dart first under Programming Languages.
+- If the JD emphasizes Firebase, prioritize it under Database / Cloud or API & Backend, depending on its actual role.
+Do not infer related technologies:
+- Do not infer Dio from REST APIs.
+- Do not infer GetX from BLoC or Provider.
+- Do not infer Swift from iOS work.
+- Do not infer native Android from Kotlin/Java alone.
+- Do not infer CI/CD from Git alone.
+Include every supported skill without exceeding eight category rows.
+3. Role and Professional Summary
+Role
+- The role field must contain only the exact official target title stated in the JD's hiring title or designated position title.
+- Preserve its wording and seniority.
+- Do not append languages, frameworks, tools, skills, specializations, pipes, commas, or descriptive keywords.
+- Do not keep the old title if the JD gives a different target title.
+- If no JD is supplied or no target title is stated, preserve the source role. Do not guess a target.
+Summary
+Write a concise professional summary of 35–45 words to match the source resume's space.
+- Use actual years of experience from the source.
+- Prioritize the strongest JD skills and technologies the candidate confirms having worked with.
+- Include relevant architecture, integrations, databases, and platforms.
+- Reflect the candidate's actual professional background.
+- Use natural language.
+- Do not inflate years or outcomes.
+- Avoid keyword stuffing.
+4. Professional Experience — Mandatory JD Tailoring
+STRICT REQUIREMENT: Actively rewrite relevant experience bullets to demonstrate the candidate's confirmed hands-on JD technologies.
 - Preserve job titles, employer names, dates, and chronology exactly.
-- Prioritize JD-relevant responsibilities and candidate-confirmed JD technologies when they fit the existing work context. Improve grammar, remove unnecessary repetition, and use clear action verbs.
-- Keep every job, with at most 2 concise bullets per job; combine related facts from the same source bullet when useful without losing important supported details.
-- Use metrics only when present in the source. Keep responsibilities and achievements factual; the candidate's statement confirms hands-on work with JD technologies but does not supply unmentioned results or duties.
-- Do not transfer tools or accomplishments between employers or projects. Do not change job titles to match the target role or add responsibilities merely because they appear in the JD.
+- Identify responsibilities, technical requirements, tools, frameworks, architecture patterns, and integrations mentioned in the JD.
+- Use the candidate's explicit confirmation of hands-on experience to incorporate relevant JD technologies into existing job experience bullets.
+- Rewrite existing bullets to demonstrate how the candidate's confirmed skills and technologies were used in relevant professional work.
+- Add JD-relevant technical details to existing bullets when the work context supports them, even if those technologies were not explicitly listed in the original bullet.
+- Prioritize important JD responsibilities and technical requirements when deciding what to highlight.
+- Each relevant job must reflect its actual technical work and should not remain generic when JD-relevant details can be included.
+- Do not simply append technology names. Explain their relevant implementation or usage naturally within existing responsibility bullets.
+- Connect technologies to relevant work rather than placing every JD technology under every employer.
+- Keep every job, with at most 2 concise bullets per job.
+- Combine related facts from the same source bullets when useful without losing important supported details.
+- Preserve all existing supported achievements, integrations, responsibilities, and metrics.
+- Use metrics only when present in the source.
+- Improve grammar and use clear action verbs.
+- Do not transfer tools or accomplishments between employers or projects.
+- Do not change job titles to match the target role.
+- Do not invent specific duties, responsibilities, results, achievements, or metrics merely because they appear in the JD.
+Expected result: Experience bullets should demonstrate relevant technical implementation and professional responsibilities, not simply repeat the candidate's original generic descriptions.
+5. Projects — Mandatory Tech Stack and Description Tailoring
+STRICT REQUIREMENT: Every project must be independently evaluated and tailored to the JD. Update BOTH its Tech Stack and project description bullets.
 
-## 5. Projects
-- Preserve all projects, names, dates, project order, and factual details.
-- Update relevant project technology stacks and descriptions to surface the JD technologies the candidate confirms having used, while keeping each technology connected only to projects where the existing context fits.
-- Keep every project, with at most 2 concise bullets per project; retain each project's factual stack and key features, and add candidate-confirmed JD technologies where that project's context fits.
-- Do not invent features, integrations, achievements, or technologies outside the JD and source resume; do not transfer details from one project to another; do not remove projects.
-- Preserve the projectLinks array exactly: same objects, names, URLs, empty strings, and order. Do not add, remove, search for, normalize, or change any project link or URL character.
-
-## 6. Location and personal information
-- Preserve the candidate's actual location exactly as supplied. Never replace it with the employer's location.
+Preserve:
+- All existing projects.
+- Exact project names.
+- Existing dates.
+- Project order.
+- Factual details.
+- Existing supported features and integrations.
+A. Project Tech Stack Requirements
+For every project:
+1. Review the complete JD.
+2. Identify mandatory, required, repeated, and preferred technologies.
+3. Compare these technologies with the project's existing context.
+4. Add all relevant candidate-confirmed JD technologies to that project's Tech Stack.
+5. Retain every existing supported technology in the original project stack.
+6. Prioritize mandatory and repeated JD technologies, followed by other relevant JD technologies and existing project technologies.
+7. Keep technologies connected only to projects where the existing context supports their use.
+8. Do not add unrelated technologies simply to increase ATS keyword coverage.
+9. Do not remove existing technologies unless they are duplicates or demonstrably incorrect.
+Important: Do not leave a project's Tech Stack unchanged if the JD contains relevant technologies the candidate confirms having worked with.
+B. Project Description Bullet Requirements
+For every project:
+- Rewrite existing project bullets to highlight the actual technical implementation relevant to the JD.
+- Incorporate relevant JD technologies and implementation details into project bullets wherever the candidate's confirmed hands-on experience and project context support them.
+- Explain practical usage rather than simply listing technology names.
+- Highlight relevant frameworks, state management, architecture, API integrations, databases, authentication, third-party SDKs, and other JD requirements when applicable.
+- Connect each technology to an appropriate project responsibility or implementation.
+- Preserve important existing features, integrations, and supported implementation details.
+- Keep up to 2 concise, meaningful bullets per project.
+- Use strong action verbs and ATS-friendly technical wording.
+- Do not leave project descriptions generic when the existing context supports more specific JD-relevant technical details.
+- Do not invent features, functionality, integrations, responsibilities, achievements, or metrics.
+- Do not transfer technologies or features from one project to another.
+- Do not automatically assign every JD technology to every project.
+Expected result: Every relevant project should demonstrate both its technical stack and how the candidate used relevant technologies in practical implementation.
+C. Project Links — Strict Preservation
+Preserve the projectLinks array exactly:
+- Same objects.
+- Same project names.
+- Same URLs.
+- Same empty strings.
+- Same order.
+Do not add, remove, search for, normalize, or change any project link or URL character.
+6. Location and Personal Information
+- Preserve the candidate's actual location exactly as supplied.
+- Never replace it with the employer's location.
 - Do not claim relocation, remote, hybrid, or onsite availability unless explicitly supported by the source.
-- Preserve the meaning of name, phone, email, website, portfolio, GitHub, education, certifications, and all other personal details. Do not invent missing information.
+- Preserve the meaning of name, phone, email, website, portfolio, GitHub, education, certifications, and all other personal details.
+- Do not invent missing information.
 - You may use JD location/work arrangement to understand the role, but it is not the candidate's location.
+7. Contact Field Normalization
+Return contact fields as clean plain text, extracting underlying values from Markdown or HTML if present.
+- Email must contain only the email address, with no label, Markdown, brackets, parentheses, or mailto:.
+- Website, portfolio, and GitHub must contain only their original URL, without Markdown/HTML wrappers or descriptive link text.
+- Preserve URL spelling.
+- Do not shorten, modify, or add tracking parameters.
+- Phone must contain only the original phone number.
+- If a contact value is absent, return an empty string.
+- Never guess a missing contact value.
+This normalization applies only to email, website, portfolio, GitHub, and phone.
 
-## 7. Contact field normalization
-Return contact fields as clean plain text, extracting underlying values from Markdown or HTML if present. Email must be only the email address, with no label, Markdown, brackets, parentheses, or mailto:. Website, portfolio, and GitHub must be only their original URL, without Markdown/HTML wrappers or descriptive link text. Preserve URL spelling and do not shorten, modify, or add tracking parameters. Phone must contain only the original phone number. If a contact value is absent, return an empty string; never guess one.
+It does not apply to projectLinks, which must remain byte-for-byte unchanged in value.
+8. Education and Certifications
+- Preserve institution, degree, graduation year, location, CGPA, and certification details.
+- Keep empty source fields empty.
+- Do not invent courses, qualifications, certifications, or academic achievements.
+9. Final Validation — Strict Quality Checklist
+Before generating the final JSON, internally validate every requirement.
+A. Skills Validation
+- Exactly 8 category rows.
+- Every skill from the source resume is included.
+- Every skill and technology named in the JD is included.
+- All skills are correctly categorized.
+- Mandatory and repeated JD skills are prioritized.
+- No unsupported adjacent skills or duplicates are added.
+B. Experience Validation
+- Every existing job is preserved.
+- Relevant JD technologies are incorporated into appropriate professional experience bullets.
+- Bullets demonstrate practical technical usage rather than merely mentioning keywords.
+- Relevant responsibilities are prioritized.
+- No employer, job title, date, achievement, or metric is fabricated.
+- No technologies or achievements are transferred between employers.
+C. Project Tech Stack Validation
+- Every existing project is preserved.
+- Every project is evaluated independently.
+- Its Tech Stack includes all relevant candidate-confirmed JD technologies that fit its existing context.
+- Existing supported project technologies are preserved.
+- No unrelated or unsupported technologies are added.
+D. Project Description Validation
+- Every project description is evaluated independently.
+- Relevant project bullets are rewritten to demonstrate JD-related technical implementation.
+- Relevant technologies appear naturally in descriptions, not only in Tech Stack.
+- Important existing features and integrations are retained.
+- No invented features, duties, integrations, achievements, or metrics are included.
+E. No Keyword-Only Tailoring
+Reject the output if:
+- JD keywords appear only in Skills.
+- Relevant Experience bullets remain generic or unchanged.
+- Project Tech Stacks do not include relevant candidate-confirmed JD technologies.
+- Project descriptions fail to demonstrate relevant practical technical usage when supported by context.
+- Technology names are added without meaningful technical context.
+F. Factual Accuracy
+- All additions must be supported by the candidate's explicit hands-on confirmation and relevant existing job/project context.
+- Do not invent responsibilities, results, metrics, features, achievements, or project details.
+- Do not transfer project-specific information between projects.
+- Do not transfer employer-specific information between jobs.
+G. Final Consistency
+Ensure Skills, Experience, Project Tech Stack, and Project Description sections support one another without contradictions.
+H. Resume Formatting and Completeness
+- Role matches the exact JD title.
+- Candidate location and contact details remain accurate.
+- Employers, dates, projects, metrics, education, certifications, and chronology remain factual.
+- projectLinks remains exactly unchanged.
+- Summary contains 35–45 words.
+- All source jobs and projects remain.
+- Bullets are concise and technically meaningful.
+- Exactly 8 Skills category rows are present.
+- Content fits the one-page A4 target using existing font sizes and margins.
+- If content overflows, shorten repetitive wording first. Never remove skills or factual sections or reduce font size.
+- Ensure the resume is ATS-readable and specifically tailored rather than generic.
+Correct any failed check before responding.
+10. Output Format — Strict
+Return exactly one complete, valid JSON object inside a single copyable JSON code block.
 
-This normalization applies only to email, website, portfolio, GitHub, and phone. It does not apply to projectLinks, which must remain byte-for-byte unchanged in value.
+Do not include:
+- Analysis.
+- Explanations.
+- Tables.
+- Match percentages.
+- Notes.
+- Recommendations.
+- Any text outside the JSON code block.
+Include exactly these keys and no extras, using this shape:
 
-## 8. Education and certifications
-Preserve institution, degree, graduation year, location, CGPA, and certification details. Keep empty source fields empty. Do not invent courses, qualifications, certifications, or academic achievements.
+{
+"name": "",
+"role": "",
+"email": "",
+"phone": "",
+"location": "",
+"website": "",
+"portfolio": "",
+"github": "",
+"summary": "",
+"skills": "",
+"experience": "",
+"projects": "",
+"projectLinks": [
+{
+"project": "",
+"playStore": "",
+"appStore": ""
+}
+],
+"education": "",
+"certifications": ""
+}
 
-## 9. Final validation
-Before output, verify internally that the Skills section has exactly 8 compact category rows and includes every skill from the saved/source skills field plus every skill and technology named in the JD. Confirm no skill was lost, all skills are categorized and ordered by JD priority, no adjacent skills were inferred, and relevant experience and project descriptions surface candidate-confirmed JD technology work without assigning every technology to every role or inventing specific duties, outcomes, or metrics. Confirm the role is only the exact JD title, candidate location and contact details remain accurate, employers, dates, projects, metrics, education, certifications, and chronology are factual, and projectLinks is exactly unchanged. Check that the summary and bullets meet the length guidance, all source jobs/projects remain, and the content fits one A4 page using the existing font sizes and margins. If it would overflow, shorten repetitive prose first; never remove skills or factual sections or reduce font size. Ensure content is ATS-readable and tailored rather than generic. Correct any failed check before responding.
+Rules:
+- Every value must be a string except projectLinks, which must remain the original array of objects with project, playStore, and appStore strings.
+- Keep every required key.
+- Use valid JSON.
+- Escape newline characters correctly.
+- Do not use comments or trailing commas.
+- Preserve the projectLinks array exactly as supplied.
+- This is a separate temporary resume.
+- Never claim to modify or overwrite the saved resume.
+''';
+    return '''
+$promptTemplate
 
-## 10. Output format — strict
-Return exactly one complete, valid JSON object inside a single copyable json code block. Do not include analysis, explanations, tables, match percentages, notes, recommendations, or any text outside that block. Include exactly these keys and no extras, using this shape:
-{"name":"","role":"","email":"","phone":"","location":"","website":"","portfolio":"","github":"","summary":"","skills":"","experience":"","projects":"","projectLinks":[{"project":"","playStore":"","appStore":""}],"education":"","certifications":""}
-
-Every value must be a string except projectLinks, which must remain the original array of objects with project, playStore, and appStore strings. Keep every required key, use valid JSON, escape newline characters correctly, and do not use comments or trailing commas. This is a separate temporary resume; never claim to modify or overwrite the saved resume.
-
-SOURCE RESUME JSON:
+SOURCE RESUME JSON
 ```json
 $sourceJson
 ```
 
 JOB DESCRIPTION:
-$jdText''';
+$jdText
+''';
   }
 
   Future<void> _showCreateTemporaryResumeDialog() async {
