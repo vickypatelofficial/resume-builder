@@ -15,6 +15,7 @@ import 'resume_pdf_attachment.dart';
 
 const emailBackendTokenStorageKey = 'resume_email_backend_token_v1';
 const projectLinksStorageKey = 'resume_project_links_v1';
+const resumeStudioVersion = '1.0.0';
 const temporaryResumeStorageKey = 'resume_temporary_data_v1';
 const resumeSetupAiPrompt = '''I will paste my existing resume. First, extract its details and identify only the project/app names that appear in its Projects section. Before producing the final JSON, ask me one short question requesting the Play Store and/or App Store URLs needed for those exact names. Ask by project/app name in a concise list. Do not mention or ask about any other apps. Do not say that you captured or already received links. Wait for my URL reply before returning the final response.
 
@@ -90,7 +91,7 @@ class ResumeApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-        title: 'Resume Studio',
+        title: 'Resume Studio - $resumeStudioVersion',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           useMaterial3: true,
@@ -1978,7 +1979,7 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
           const Icon(Icons.description_outlined, color: Color(0xff245b54)),
           if (!compact || isTemporaryResume) ...[
             const SizedBox(width: 9),
-            Flexible(child: Text(isTemporaryResume ? 'Temporary resume' : 'Resume Studio', overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
+            Flexible(child: Text(isTemporaryResume ? 'Temporary resume' : 'Resume Studio - $resumeStudioVersion', overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
           ],
         ]),
         actions: [
