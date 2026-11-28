@@ -1590,6 +1590,16 @@ $jobDescription''';
     final query = _projectLinkKey(project);
     if (query.isEmpty) return null;
     Map<String, String>? link;
+    final field = platform == 'Play Store' ? 'playStore' : 'appStore';
+    if (_looksLikeStoreUrl(project)) {
+      final normalizedQueryUrl = _normalizedStoreUrl(project);
+      for (final item in projectLinks) {
+        final savedUrl = item[field]?.trim() ?? '';
+        if (savedUrl.isNotEmpty && _normalizedStoreUrl(savedUrl) == normalizedQueryUrl) {
+          return _asUrl(savedUrl);
+        }
+      }
+    }
     // Prefer an exact app-name match, then allow projectLinks entries that
     // include the parent project title plus the app name (e.g. "Pool Pal -
     // Mobility - PoolPal User").
@@ -1607,12 +1617,31 @@ $jobDescription''';
         ..sort((a, b) => _projectLinkKey(b['project'] ?? '').length.compareTo(_projectLinkKey(a['project'] ?? '').length));
       if (matches.isNotEmpty) link = matches.first;
     }
-    final key = platform == 'Play Store' ? 'playStore' : 'appStore';
-    final value = link?[key]?.trim() ?? '';
+    final value = link?[field]?.trim() ?? '';
     return value.isEmpty ? null : _asUrl(value);
   }
 
   String _projectLinkKey(String value) => value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+  bool _looksLikeStoreUrl(String value) => RegExp(r'^(?:https?://|www\.|play\.google\.com/|apps\.apple\.com/)', caseSensitive: false).hasMatch(value.trim());
+
+  String _normalizedStoreUrl(String value) => _asUrl(value.trim()).replaceFirst(RegExp(r'/+$'), '');
+
+  String _projectStoreDisplayName(String name, String platform) {
+    if (!_looksLikeStoreUrl(name)) return name.trim();
+    final uri = Uri.tryParse(_asUrl(name.trim()));
+    if (uri == null || !{'http', 'https'}.contains(uri.scheme.toLowerCase())) return name.trim();
+    final key = platform == 'Play Store' ? 'playStore' : 'appStore';
+    for (final item in projectLinks) {
+      final savedUrl = item[key]?.trim() ?? '';
+      if (savedUrl.isEmpty || _normalizedStoreUrl(savedUrl) != _normalizedStoreUrl(name)) continue;
+      final appOrProjectName = (item['project'] ?? '').trim();
+      if (appOrProjectName.isEmpty) break;
+      final parts = appOrProjectName.split(RegExp(r'\s+-\s+')).map((part) => part.trim()).where((part) => part.isNotEmpty).toList();
+      return parts.isEmpty ? appOrProjectName : parts.last;
+    }
+    return platform == 'Play Store' ? 'Google Play app' : 'App Store app';
+  }
 
   Future<void> _editProjectLink({int? index}) async {
     final current = index == null ? <String, String>{} : Map<String, String>.from(projectLinks[index]);
@@ -2205,7 +2234,7 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
       for (var i = 0; i < platformLinks.length; i++) {
         if (i > 0) children.add(pw.Text(', ', style: pw.TextStyle(font: regular, fontSize: style.descriptionSize)));
         final link = platformLinks[i];
-        final label = pw.Text(link.name, style: pw.TextStyle(
+        final label = pw.Text(_projectStoreDisplayName(link.name, platform), style: pw.TextStyle(
           font: bold,
           fontSize: style.descriptionSize,
           decoration: pw.TextDecoration.underline,
@@ -2626,7 +2655,7 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
         final url = _projectUrl(link.name, platform);
         children.add(url == null
             ? Text(link.name, style: TextStyle(fontFamily: 'serif', fontSize: style.descriptionSize, decoration: TextDecoration.underline))
-            : _previewLink(link.name, url));
+            : _previewLink(_projectStoreDisplayName(link.name, platform), url));
       }
     }
     if (children.isEmpty) return const SizedBox.shrink();
