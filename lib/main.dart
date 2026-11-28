@@ -2227,8 +2227,11 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
     for (final platform in ['Play Store', 'App Store']) {
       final platformLinks = availableLinks.where((link) => link.platform == platform).toList();
       if (platformLinks.isEmpty) continue;
+      if (children.isNotEmpty) {
+        children.add(pw.Text(', ', style: pw.TextStyle(font: regular, fontSize: style.descriptionSize)));
+      }
       children.add(pw.Padding(
-        padding: pw.EdgeInsets.only(left: children.isEmpty ? 0 : 4),
+        padding: const pw.EdgeInsets.only(left: 0),
         child: pw.Text('$platform: ', style: pw.TextStyle(font: bold, fontSize: style.descriptionSize)),
       ));
       for (var i = 0; i < platformLinks.length; i++) {
@@ -2645,8 +2648,11 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
     for (final platform in ['Play Store', 'App Store']) {
       final platformLinks = availableLinks.where((link) => link.platform == platform).toList();
       if (platformLinks.isEmpty) continue;
+      if (children.isNotEmpty) {
+        children.add(Text(', ', style: TextStyle(fontFamily: 'serif', fontSize: style.descriptionSize)));
+      }
       children.add(Padding(
-        padding: EdgeInsets.only(left: children.isEmpty ? 0 : 4),
+        padding: EdgeInsets.zero,
         child: Text('$platform: ', style: TextStyle(fontFamily: 'serif', fontSize: style.descriptionSize, fontWeight: FontWeight.w700)),
       ));
       for (var i = 0; i < platformLinks.length; i++) {
