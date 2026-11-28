@@ -2193,8 +2193,10 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
 
   pw.Widget _pdfProjectStoreRow(List<({String platform, String name})> links, pw.Font regular, pw.Font bold) {
     final children = <pw.Widget>[];
+    final availableLinks = links.where((link) => _projectUrl(link.name, link.platform) != null).toList();
+    if (availableLinks.isEmpty) return pw.SizedBox.shrink();
     for (final platform in ['Play Store', 'App Store']) {
-      final platformLinks = links.where((link) => link.platform == platform).toList();
+      final platformLinks = availableLinks.where((link) => link.platform == platform).toList();
       if (platformLinks.isEmpty) continue;
       children.add(pw.Padding(
         padding: pw.EdgeInsets.only(left: children.isEmpty ? 0 : 4),
@@ -2609,8 +2611,10 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
 
   Widget _previewProjectStoreRow(List<({String platform, String name})> links) {
     final children = <Widget>[];
+    final availableLinks = links.where((link) => _projectUrl(link.name, link.platform) != null).toList();
+    if (availableLinks.isEmpty) return const SizedBox.shrink();
     for (final platform in ['Play Store', 'App Store']) {
-      final platformLinks = links.where((link) => link.platform == platform).toList();
+      final platformLinks = availableLinks.where((link) => link.platform == platform).toList();
       if (platformLinks.isEmpty) continue;
       children.add(Padding(
         padding: EdgeInsets.only(left: children.isEmpty ? 0 : 4),
