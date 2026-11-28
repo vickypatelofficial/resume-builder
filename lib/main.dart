@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
@@ -11,6 +12,8 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'email_file_share_stub.dart'
+    if (dart.library.html) 'email_file_share_web.dart' as browser_file_share;
 import 'resume_pdf_attachment.dart';
 
 const emailBackendTokenStorageKey = 'resume_email_backend_token_v1';
@@ -45,7 +48,7 @@ class ResumeStyleSettings {
     this.topMargin = 25.8,
     this.bottomMargin = 35,
     this.contentPadding = 0,
-    this.descriptionSize = 10,
+    this.descriptionSize = 9,
     this.headingSize = 13,
     this.subheadingSize = 11,
   });
@@ -68,7 +71,7 @@ class ResumeStyleSettings {
         topMargin: (map['topMargin'] as num?)?.toDouble() ?? 25.8,
         bottomMargin: (map['bottomMargin'] as num?)?.toDouble() ?? 35,
         contentPadding: (map['contentPadding'] as num?)?.toDouble() ?? 0,
-        descriptionSize: (map['descriptionSize'] as num?)?.toDouble() ?? 10,
+        descriptionSize: (map['descriptionSize'] as num?)?.toDouble() ?? 9,
         headingSize: (map['headingSize'] as num?)?.toDouble() ?? 13,
         subheadingSize: (map['subheadingSize'] as num?)?.toDouble() ?? 11,
       );
@@ -143,6 +146,7 @@ class _ResumeHomeState extends State<ResumeHome> {
   ResumeStyleSettings style = const ResumeStyleSettings();
   final secureStorage = const FlutterSecureStorage();
   final controllers = <String, TextEditingController>{};
+  ByteData? _linkedinIconData;
   List<Map<String, String>> projectLinks = [];
   List<List<_PdfPreviewLink>> _pdfPreviewLinks = [];
   String _pdfPreviewLinksSignature = '';
@@ -159,6 +163,11 @@ class _ResumeHomeState extends State<ResumeHome> {
   }
 
   Future<void> _load() async {
+    try {
+      _linkedinIconData = await rootBundle.load('assets/linkedin_icon.png');
+    } catch (_) {
+      _linkedinIconData = null;
+    }
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('resume_data_v2');
     final baseRaw = prefs.getString('resume_base_data_v1');
@@ -1587,12 +1596,13 @@ $jobDescription''';
   }
 
   String? _projectUrl(String project, String platform) {
-    final query = _projectLinkKey(project);
-    if (query.isEmpty) return null;
+    final storeUrl = _extractStoreUrl(project);
+    final displayName = storeUrl == null ? project : project.replaceAll(storeUrl, '').trim();
+    final query = _projectLinkKey(displayName);
     Map<String, String>? link;
     final field = platform == 'Play Store' ? 'playStore' : 'appStore';
-    if (_looksLikeStoreUrl(project)) {
-      final normalizedQueryUrl = _normalizedStoreUrl(project);
+    if (storeUrl != null) {
+      final normalizedQueryUrl = _normalizedStoreUrl(storeUrl);
       for (final item in projectLinks) {
         final savedUrl = item[field]?.trim() ?? '';
         if (savedUrl.isNotEmpty && _normalizedStoreUrl(savedUrl) == normalizedQueryUrl) {
@@ -1600,6 +1610,7 @@ $jobDescription''';
         }
       }
     }
+    if (query.isEmpty) return null;
     // Prefer an exact app-name match, then allow projectLinks entries that
     // include the parent project title plus the app name (e.g. "Pool Pal -
     // Mobility - PoolPal User").
@@ -1623,23 +1634,30 @@ $jobDescription''';
 
   String _projectLinkKey(String value) => value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
 
-  bool _looksLikeStoreUrl(String value) => RegExp(r'^(?:https?://|www\.|play\.google\.com/|apps\.apple\.com/)', caseSensitive: false).hasMatch(value.trim());
+  String? _extractStoreUrl(String value) {
+    final match = RegExp(r'(?:(?:https?://)?(?:www\.)?(?:play\.google\.com|apps\.apple\.com)/)[^\s,|<>]+', caseSensitive: false).firstMatch(value);
+    final url = match?.group(0)?.replaceFirst(RegExp(r'[)\].;]+$'), '').trim();
+    return url == null || url.isEmpty ? null : url;
+  }
 
-  String _normalizedStoreUrl(String value) => _asUrl(value.trim()).replaceFirst(RegExp(r'/+$'), '');
+  bool _looksLikeStoreUrl(String value) => _extractStoreUrl(value) != null;
+
+  String _normalizedStoreUrl(String value) => _asUrl(value.trim()).replaceFirst(RegExp(r'[/),.;]+$'), '');
 
   String _projectStoreDisplayName(String name, String platform) {
-    if (!_looksLikeStoreUrl(name)) return name.trim();
-    final uri = Uri.tryParse(_asUrl(name.trim()));
-    if (uri == null || !{'http', 'https'}.contains(uri.scheme.toLowerCase())) return name.trim();
+    final storeUrl = _extractStoreUrl(name);
+    if (storeUrl == null) return name.trim();
     final key = platform == 'Play Store' ? 'playStore' : 'appStore';
     for (final item in projectLinks) {
       final savedUrl = item[key]?.trim() ?? '';
-      if (savedUrl.isEmpty || _normalizedStoreUrl(savedUrl) != _normalizedStoreUrl(name)) continue;
+      if (savedUrl.isEmpty || _normalizedStoreUrl(savedUrl) != _normalizedStoreUrl(storeUrl)) continue;
       final appOrProjectName = (item['project'] ?? '').trim();
       if (appOrProjectName.isEmpty) break;
       final parts = appOrProjectName.split(RegExp(r'\s+-\s+')).map((part) => part.trim()).where((part) => part.isNotEmpty).toList();
       return parts.isEmpty ? appOrProjectName : parts.last;
     }
+    final nameWithoutUrl = name.replaceAll(storeUrl, '').replaceAll(RegExp(r'^[\s:,-]+|[\s:,-]+$'), '').trim();
+    if (nameWithoutUrl.isNotEmpty) return nameWithoutUrl;
     return platform == 'Play Store' ? 'Google Play app' : 'App Store app';
   }
 
@@ -1739,7 +1757,9 @@ $jobDescription''';
     return names;
   }
 
-  bool _isProjectStoreLine(String line) => RegExp(r'(?:Play Store|App\s*Store)\s*:', caseSensitive: false).hasMatch(line);
+  bool _isProjectStoreLine(String line) =>
+      RegExp(r'(?:Play Store|App\s*Store)\s*:', caseSensitive: false).hasMatch(line) ||
+      (_extractStoreUrl(line) != null && line.trim().replaceAll(RegExp(r'[),.;]+$'), '') == _extractStoreUrl(line));
 
   List<({String platform, String name})> _projectStoreTokens(List<String> lines) {
     final explicitPlatforms = <String, Set<String>>{};
@@ -1747,6 +1767,13 @@ $jobDescription''';
     final labelPattern = RegExp(r'(Play Store|App\s*Store)\s*:', caseSensitive: false);
     for (final line in lines) {
       final labels = labelPattern.allMatches(line).toList();
+      if (labels.isEmpty && _extractStoreUrl(line) != null) {
+        final url = _extractStoreUrl(line)!;
+        final platform = url.toLowerCase().contains('apps.apple.com') ? 'App Store' : 'Play Store';
+        final key = url.toLowerCase();
+        if (!names.any((existing) => existing.toLowerCase() == key)) names.add(url);
+        explicitPlatforms.putIfAbsent(key, () => <String>{}).add(platform);
+      }
       for (var i = 0; i < labels.length; i++) {
         final label = labels[i];
         final platform = label.group(1)!.toLowerCase().startsWith('play') ? 'Play Store' : 'App Store';
@@ -1768,7 +1795,14 @@ $jobDescription''';
         }
       }
     }
-    return tokens;
+    final uniqueTokens = <({String platform, String name})>[];
+    final seen = <String>{};
+    for (final token in tokens) {
+      final displayName = _projectStoreDisplayName(token.name, token.platform);
+      final key = '${token.platform}:${_projectLinkKey(displayName)}';
+      if (seen.add(key)) uniqueTokens.add(token);
+    }
+    return uniqueTokens;
   }
 
   List<({String platform, String name})> _projectStoreTokensForEntry(String title, List<String> lines, {String entryText = ''}) {
@@ -1781,15 +1815,28 @@ $jobDescription''';
       final key = _projectLinkKey(name);
       if (key.isEmpty || (!searchableEntry.contains(key) && key != _projectLinkKey(title))) continue;
       if (tokens.isNotEmpty && key == _projectLinkKey(title)) continue;
+      final nameParts = name.split(RegExp(r'\s+-\s+')).map((part) => part.trim()).where((part) => part.isNotEmpty).toList();
+      final appName = nameParts.isEmpty ? name : nameParts.last;
       for (final (platform, field) in [('Play Store', 'playStore'), ('App Store', 'appStore')]) {
         final url = item[field]?.trim() ?? '';
         if (url.isEmpty) continue;
-        if (!tokens.any((token) => token.platform == platform && _projectLinkKey(token.name) == key)) {
-          tokens.add((platform: platform, name: name));
+        final normalizedAppName = _projectLinkKey(appName);
+        final alreadyPresent = tokens.any((token) =>
+            token.platform == platform &&
+            _projectLinkKey(_projectStoreDisplayName(token.name, platform)) == normalizedAppName);
+        if (!alreadyPresent) {
+          tokens.add((platform: platform, name: appName));
         }
       }
     }
-    return tokens;
+    final uniqueTokens = <({String platform, String name})>[];
+    final seen = <String>{};
+    for (final token in tokens) {
+      final displayName = _projectStoreDisplayName(token.name, token.platform);
+      final key = '${token.platform}:${_projectLinkKey(displayName)}';
+      if (seen.add(key)) uniqueTokens.add(token);
+    }
+    return uniqueTokens;
   }
 
   String _bulkStoreLinksPrompt() {
@@ -1901,7 +1948,28 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
         pw.Center(child: pw.Wrap(alignment: pw.WrapAlignment.center, spacing: 3, children: [
           pw.Text(data.email, style: pw.TextStyle(font: regular, fontSize: 11)),
           if (data.email.isNotEmpty && data.website.isNotEmpty) pw.Text('|', style: pw.TextStyle(font: regular, fontSize: 11)),
-          if (data.website.isNotEmpty) pw.UrlLink(destination: _asUrl(data.website), child: pw.Text(data.website, style: pw.TextStyle(font: regular, fontSize: 11, decoration: pw.TextDecoration.underline))),
+          if (data.website.isNotEmpty)
+            pw.UrlLink(
+              destination: _asUrl(data.website),
+              child: pw.Row(mainAxisSize: pw.MainAxisSize.min, children: [
+                pw.Container(
+                  width: 9,
+                  height: 9,
+                  child: _linkedinIconData == null
+                      ? pw.Text('in', style: pw.TextStyle(font: bold, fontSize: 6))
+                      : pw.Image(
+                          pw.MemoryImage(_linkedinIconData!.buffer.asUint8List(
+                            _linkedinIconData!.offsetInBytes,
+                            _linkedinIconData!.lengthInBytes,
+                          )),
+                          width: 9,
+                          height: 9,
+                        ),
+                ),
+                pw.SizedBox(width: 2),
+                pw.Text('LinkedIn', style: pw.TextStyle(font: regular, fontSize: 11, decoration: pw.TextDecoration.underline)),
+              ]),
+            ),
           if (data.website.isNotEmpty && data.portfolio.isNotEmpty) pw.Text('|', style: pw.TextStyle(font: regular, fontSize: 11)),
           if (data.portfolio.isNotEmpty) pw.UrlLink(destination: data.portfolio, child: pw.Text('Portfolio', style: pw.TextStyle(font: regular, fontSize: 11, decoration: pw.TextDecoration.underline))),
         ])),
@@ -1944,6 +2012,24 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
   }
 
   Future<void> _showEmailResumeDialog() async {
+    Uint8List? preparedWebPdf;
+    String? webBackendUrl;
+    Future<void>? browserShareTask;
+    if (kIsWeb) {
+      try {
+        await _save();
+        preparedWebPdf = await _buildPdfDocument().save();
+        final prefs = await SharedPreferences.getInstance();
+        webBackendUrl = prefs.getString('resume_email_backend_url_v1');
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not prepare the resume PDF: $error')),
+          );
+        }
+        return;
+      }
+    }
     final toController = TextEditingController();
     final subjectController = TextEditingController(text: '${controllers['name']!.text.trim()} - Resume');
     final bodyController = TextEditingController(text: 'Hello,\n\nPlease find my resume attached.\n\nRegards,\n${controllers['name']!.text.trim()}');
@@ -1960,8 +2046,20 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
           TextField(controller: bodyController, minLines: 4, maxLines: 8, decoration: const InputDecoration(labelText: 'Message', alignLabelWithHint: true)),
           if (errorText != null) ...[const SizedBox(height: 10), Text(errorText!, style: TextStyle(color: Theme.of(context).colorScheme.error))],
           const SizedBox(height: 8),
-          const Text('The app opens your mail composer when available. If it is unavailable, a configured backend sends the email directly.', style: TextStyle(fontSize: 12, color: Color(0xff68756e))),
-          Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: _configureEmailBackend, icon: const Icon(Icons.settings_outlined), label: const Text('Configure auto-send fallback'))),
+          const Text('On phones, this opens your mail app with the PDF attached. In Chrome, it opens the share sheet with the PDF when supported; otherwise the PDF downloads. A configured backend can send it directly.', style: TextStyle(fontSize: 12, color: Color(0xff68756e))),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () async {
+                await _configureEmailBackend();
+                final prefs = await SharedPreferences.getInstance();
+                webBackendUrl = prefs.getString('resume_email_backend_url_v1');
+                refreshDialog(() {});
+              },
+              icon: const Icon(Icons.settings_outlined),
+              label: const Text('Configure auto-send fallback'),
+            ),
+          ),
         ]))),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
@@ -1972,7 +2070,17 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
               refreshDialog(() => errorText = 'Enter a valid email address.');
               return;
             }
-            Navigator.pop(dialogContext, {'to': recipients.join(','), 'subject': subjectController.text.trim(), 'body': bodyController.text.trim()});
+            final details = {
+              'to': recipients.join(','),
+              'subject': subjectController.text.trim(),
+              'body': bodyController.text.trim(),
+            };
+            if (kIsWeb && (webBackendUrl == null || webBackendUrl!.trim().isEmpty)) {
+              final safeName = controllers['name']!.text.trim().replaceAll(RegExp(r'[^A-Za-z0-9_-]+'), '_').replaceAll(RegExp(r'^_+|_+$'), '');
+              final fileName = '${safeName.isEmpty ? 'Resume' : safeName}_Resume.pdf';
+              browserShareTask = _shareResumeInBrowser(preparedWebPdf!, fileName, details);
+            }
+            Navigator.pop(dialogContext, details);
           }, icon: const Icon(Icons.send_outlined), label: const Text('Open email')),
         ],
       )),
@@ -1981,7 +2089,13 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
     toController.dispose();
     subjectController.dispose();
     bodyController.dispose();
-    if (details != null && mounted) await _sendResumeEmail(details);
+    if (details != null && mounted) {
+      if (browserShareTask != null) {
+        await browserShareTask;
+      } else {
+        await _sendResumeEmail(details);
+      }
+    }
   }
 
   Future<void> _configureEmailBackend() async {
@@ -2024,6 +2138,74 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
     await Future<void>.delayed(const Duration(milliseconds: 350));
     urlController.dispose();
     tokenController.dispose();
+  }
+
+  Future<void> _shareResumeInBrowser(
+    Uint8List pdfBytes,
+    String fileName,
+    Map<String, String> details,
+  ) {
+    final shareRequest = browser_file_share.sharePdfFile(
+      pdfBytes,
+      fileName: fileName,
+      subject: details['subject'] ?? '',
+      body: details['body'] ?? '',
+    );
+    return _finishBrowserResumeShare(shareRequest, pdfBytes, fileName, details);
+  }
+
+  Future<void> _finishBrowserResumeShare(
+    Future<bool> shareRequest,
+    Uint8List pdfBytes,
+    String fileName,
+    Map<String, String> details,
+  ) async {
+    var shared = false;
+    try {
+      shared = await shareRequest;
+    } catch (error) {
+      if (error.toString().toLowerCase().contains('abort')) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Resume sharing was cancelled.')),
+          );
+        }
+        return;
+      }
+    }
+    if (shared) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Share sheet opened with the PDF and email details. Choose your email app and review before sending.')),
+        );
+      }
+      return;
+    }
+    await _openDownloadedResumeEmail(pdfBytes, fileName, details);
+  }
+
+  Future<void> _openDownloadedResumeEmail(
+    Uint8List pdfBytes,
+    String fileName,
+    Map<String, String> details,
+  ) async {
+    await Printing.sharePdf(bytes: pdfBytes, filename: fileName);
+    final recipients = (details['to'] ?? '').split(',').map((value) => value.trim()).where((value) => value.isNotEmpty).toList();
+    final mailto = Uri(
+      scheme: 'mailto',
+      path: recipients.join(','),
+      queryParameters: {
+        'subject': details['subject'] ?? '',
+        'body': details['body'] ?? '',
+      },
+    );
+    final opened = await launchUrl(mailto, mode: LaunchMode.externalApplication);
+    if (!opened) throw Exception('This browser cannot attach files to an email draft. The PDF was downloaded; attach it manually or configure the email backend.');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This browser could not attach the PDF automatically. The PDF was downloaded and the draft opened; attach it before sending.')),
+      );
+    }
   }
 
   Future<void> _sendResumeEmail(Map<String, String> details) async {
