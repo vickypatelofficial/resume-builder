@@ -2046,7 +2046,32 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
           TextField(controller: bodyController, minLines: 4, maxLines: 8, decoration: const InputDecoration(labelText: 'Message', alignLabelWithHint: true)),
           if (errorText != null) ...[const SizedBox(height: 10), Text(errorText!, style: TextStyle(color: Theme.of(context).colorScheme.error))],
           const SizedBox(height: 8),
-          const Text('On phones, this opens your mail app with the PDF attached. In Chrome, it opens the share sheet with the PDF when supported; otherwise the PDF downloads. A configured backend can send it directly.', style: TextStyle(fontSize: 12, color: Color(0xff68756e))),
+          const Text('Open Gmail draft fills the recipient and message in a new tab, then downloads the PDF for you to attach. Share with attachment uses the browser share sheet when supported; enter the recipient in your email app. The configured backend can send directly.', style: TextStyle(fontSize: 12, color: Color(0xff68756e))),
+          if (kIsWeb && (webBackendUrl == null || webBackendUrl!.trim().isEmpty))
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  final recipients = toController.text.split(RegExp(r'[,;]')).map((value) => value.trim()).where((value) => value.isNotEmpty).toList();
+                  final valid = recipients.isNotEmpty && recipients.every((value) => RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value));
+                  if (!valid) {
+                    refreshDialog(() => errorText = 'Enter a valid email address.');
+                    return;
+                  }
+                  final details = {
+                    'to': recipients.join(','),
+                    'subject': subjectController.text.trim(),
+                    'body': bodyController.text.trim(),
+                  };
+                  final safeName = controllers['name']!.text.trim().replaceAll(RegExp(r'[^A-Za-z0-9_-]+'), '_').replaceAll(RegExp(r'^_+|_+$'), '');
+                  final fileName = '${safeName.isEmpty ? 'Resume' : safeName}_Resume.pdf';
+                  browserShareTask = _shareResumeInBrowser(preparedWebPdf!, fileName, details);
+                  Navigator.pop(dialogContext, details);
+                },
+                icon: const Icon(Icons.attach_file),
+                label: const Text('Share with attachment'),
+              ),
+            ),
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
@@ -2078,10 +2103,17 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
             if (kIsWeb && (webBackendUrl == null || webBackendUrl!.trim().isEmpty)) {
               final safeName = controllers['name']!.text.trim().replaceAll(RegExp(r'[^A-Za-z0-9_-]+'), '_').replaceAll(RegExp(r'^_+|_+$'), '');
               final fileName = '${safeName.isEmpty ? 'Resume' : safeName}_Resume.pdf';
-              browserShareTask = _shareResumeInBrowser(preparedWebPdf!, fileName, details);
+              browserShareTask = _openGmailDraftWithDownloadedResume(preparedWebPdf!, fileName, details);
             }
             Navigator.pop(dialogContext, details);
-          }, icon: const Icon(Icons.send_outlined), label: const Text('Open email')),
+          },
+            icon: const Icon(Icons.send_outlined),
+            label: Text(
+              kIsWeb
+                  ? (webBackendUrl != null && webBackendUrl!.trim().isNotEmpty ? 'Send email' : 'Open Gmail draft')
+                  : 'Open email',
+            ),
+          ),
         ],
       )),
     );
@@ -2152,6 +2184,40 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
       body: details['body'] ?? '',
     );
     return _finishBrowserResumeShare(shareRequest, pdfBytes, fileName, details);
+  }
+
+  Future<void> _openGmailDraftWithDownloadedResume(
+    Uint8List pdfBytes,
+    String fileName,
+    Map<String, String> details,
+  ) async {
+    final gmailCompose = Uri.https('mail.google.com', '/mail/', {
+      'view': 'cm',
+      'fs': '1',
+      'to': details['to'] ?? '',
+      'su': details['subject'] ?? '',
+      'body': details['body'] ?? '',
+    });
+    try {
+      final opened = await launchUrl(
+        gmailCompose,
+        mode: LaunchMode.externalApplication,
+        webOnlyWindowName: '_blank',
+      );
+      if (!opened) throw Exception('Could not open Gmail in a new tab.');
+      await Printing.sharePdf(bytes: pdfBytes, filename: fileName);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gmail draft opened in a new tab and the PDF downloaded. Attach the downloaded resume before sending.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    }
   }
 
   Future<void> _finishBrowserResumeShare(
