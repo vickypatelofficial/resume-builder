@@ -2197,7 +2197,7 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
       final platformLinks = links.where((link) => link.platform == platform).toList();
       if (platformLinks.isEmpty) continue;
       children.add(pw.Padding(
-        padding: pw.EdgeInsets.only(left: children.isEmpty ? 0 : 8),
+        padding: pw.EdgeInsets.only(left: children.isEmpty ? 0 : 4),
         child: pw.Text('$platform: ', style: pw.TextStyle(font: bold, fontSize: style.descriptionSize)),
       ));
       for (var i = 0; i < platformLinks.length; i++) {
@@ -2613,7 +2613,7 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
       final platformLinks = links.where((link) => link.platform == platform).toList();
       if (platformLinks.isEmpty) continue;
       children.add(Padding(
-        padding: EdgeInsets.only(left: children.isEmpty ? 0 : 8),
+        padding: EdgeInsets.only(left: children.isEmpty ? 0 : 4),
         child: Text('$platform: ', style: TextStyle(fontFamily: 'serif', fontSize: style.descriptionSize, fontWeight: FontWeight.w700)),
       ));
       for (var i = 0; i < platformLinks.length; i++) {
