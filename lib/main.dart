@@ -12,8 +12,6 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'email_file_share_stub.dart'
-    if (dart.library.html) 'email_file_share_web.dart' as browser_file_share;
 import 'resume_pdf_attachment.dart';
 
 const emailBackendTokenStorageKey = 'resume_email_backend_token_v1';
@@ -1634,6 +1632,39 @@ $jobDescription''';
 
   String _projectLinkKey(String value) => value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
 
+  Set<String> _projectNameWords(String value) {
+    final separated = value.replaceAllMapped(
+      RegExp(r'([a-z0-9])([A-Z])'),
+      (match) => '${match.group(1)} ${match.group(2)}',
+    );
+    return separated
+        .toLowerCase()
+        .split(RegExp(r'[^a-z0-9]+'))
+        .where((word) => word.length >= 3)
+        .toSet();
+  }
+
+  bool _storeAppNameMatchesProject(String appName, String projectTitle) {
+    final appWords = _projectNameWords(appName);
+    final projectWords = _projectNameWords(projectTitle);
+    final sharedWords = appWords.intersection(projectWords);
+    sharedWords.removeAll(const {
+      'app',
+      'application',
+      'customer',
+      'developer',
+      'driver',
+      'management',
+      'mobile',
+      'platform',
+      'project',
+      'service',
+      'system',
+      'user',
+    });
+    return sharedWords.length >= 2 || sharedWords.any((word) => word.length >= 5);
+  }
+
   String? _extractStoreUrl(String value) {
     final match = RegExp(r'(?:(?:https?://)?(?:www\.)?(?:play\.google\.com|apps\.apple\.com)/)[^\s,|<>]+', caseSensitive: false).firstMatch(value);
     final url = match?.group(0)?.replaceFirst(RegExp(r'[)\].;]+$'), '').trim();
@@ -1761,7 +1792,7 @@ $jobDescription''';
       RegExp(r'(?:Play Store|App\s*Store)\s*:', caseSensitive: false).hasMatch(line) ||
       (_extractStoreUrl(line) != null && line.trim().replaceAll(RegExp(r'[),.;]+$'), '') == _extractStoreUrl(line));
 
-  List<({String platform, String name})> _projectStoreTokens(List<String> lines) {
+  List<({String platform, String name, String? url})> _projectStoreTokens(List<String> lines) {
     final explicitPlatforms = <String, Set<String>>{};
     final names = <String>[];
     final labelPattern = RegExp(r'(Play Store|App\s*Store)\s*:', caseSensitive: false);
@@ -1787,15 +1818,16 @@ $jobDescription''';
       }
     }
 
-    final tokens = <({String platform, String name})>[];
+    final tokens = <({String platform, String name, String? url})>[];
     for (final name in names) {
       for (final platform in ['Play Store', 'App Store']) {
-        if (explicitPlatforms[name.toLowerCase()]!.contains(platform) || _projectUrl(name, platform) != null) {
-          tokens.add((platform: platform, name: name));
+        final url = _projectUrl(name, platform);
+        if (explicitPlatforms[name.toLowerCase()]!.contains(platform) || url != null) {
+          tokens.add((platform: platform, name: name, url: url));
         }
       }
     }
-    final uniqueTokens = <({String platform, String name})>[];
+    final uniqueTokens = <({String platform, String name, String? url})>[];
     final seen = <String>{};
     for (final token in tokens) {
       final displayName = _projectStoreDisplayName(token.name, token.platform);
@@ -1805,31 +1837,50 @@ $jobDescription''';
     return uniqueTokens;
   }
 
-  List<({String platform, String name})> _projectStoreTokensForEntry(String title, List<String> lines, {String entryText = ''}) {
+  List<({String platform, String name, String? url})> _projectStoreTokensForEntry(String title, List<String> lines, {String entryText = ''}) {
     final tokens = _projectStoreTokens(lines);
     // Saved links may be keyed by the project title or by an app name that
     // appears in its details. Render those links even without store label lines.
     final searchableEntry = _projectLinkKey('$title $entryText');
+    final titleKey = _projectLinkKey(title);
+    final bodyKey = _projectLinkKey(entryText);
     for (final item in projectLinks) {
       final name = (item['project'] ?? '').trim();
       final key = _projectLinkKey(name);
-      if (key.isEmpty || (!searchableEntry.contains(key) && key != _projectLinkKey(title))) continue;
-      if (tokens.isNotEmpty && key == _projectLinkKey(title)) continue;
       final nameParts = name.split(RegExp(r'\s+-\s+')).map((part) => part.trim()).where((part) => part.isNotEmpty).toList();
       final appName = nameParts.isEmpty ? name : nameParts.last;
+      final appKey = _projectLinkKey(appName);
+      final projectPrefix = nameParts.length > 1 ? _projectLinkKey(nameParts.take(nameParts.length - 1).join(' ')) : '';
+      final parentMatchesTitle = projectPrefix.isNotEmpty &&
+          (projectPrefix == titleKey ||
+              projectPrefix.contains(titleKey) ||
+              titleKey.contains(projectPrefix));
+      final savedNameMatchesEntry = key == titleKey || searchableEntry.contains(key);
+      final appNameMatchesEntry = appKey.isNotEmpty && bodyKey.contains(appKey);
+      final projectAndAppMatchEntry = parentMatchesTitle ||
+          (projectPrefix.isEmpty &&
+              (appNameMatchesEntry || _storeAppNameMatchesProject(appName, title)));
+      if (key.isEmpty || (!savedNameMatchesEntry && !projectAndAppMatchEntry)) continue;
+      if (tokens.isNotEmpty && key == titleKey) continue;
       for (final (platform, field) in [('Play Store', 'playStore'), ('App Store', 'appStore')]) {
         final url = item[field]?.trim() ?? '';
         if (url.isEmpty) continue;
         final normalizedAppName = _projectLinkKey(appName);
-        final alreadyPresent = tokens.any((token) =>
+        final existingIndex = tokens.indexWhere((token) =>
             token.platform == platform &&
             _projectLinkKey(_projectStoreDisplayName(token.name, platform)) == normalizedAppName);
-        if (!alreadyPresent) {
-          tokens.add((platform: platform, name: appName));
+        if (existingIndex < 0) {
+          tokens.add((platform: platform, name: appName, url: _asUrl(url)));
+        } else if (tokens[existingIndex].url == null) {
+          tokens[existingIndex] = (
+            platform: platform,
+            name: tokens[existingIndex].name,
+            url: _asUrl(url),
+          );
         }
       }
     }
-    final uniqueTokens = <({String platform, String name})>[];
+    final uniqueTokens = <({String platform, String name, String? url})>[];
     final seen = <String>{};
     for (final token in tokens) {
       final displayName = _projectStoreDisplayName(token.name, token.platform);
@@ -2014,7 +2065,7 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
   Future<void> _showEmailResumeDialog() async {
     Uint8List? preparedWebPdf;
     String? webBackendUrl;
-    Future<void>? browserShareTask;
+    Future<void>? webEmailTask;
     if (kIsWeb) {
       try {
         await _save();
@@ -2046,32 +2097,7 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
           TextField(controller: bodyController, minLines: 4, maxLines: 8, decoration: const InputDecoration(labelText: 'Message', alignLabelWithHint: true)),
           if (errorText != null) ...[const SizedBox(height: 10), Text(errorText!, style: TextStyle(color: Theme.of(context).colorScheme.error))],
           const SizedBox(height: 8),
-          const Text('Open Gmail draft fills the recipient and message in a new tab, then downloads the PDF for you to attach. Share with attachment uses the browser share sheet when supported; enter the recipient in your email app. The configured backend can send directly.', style: TextStyle(fontSize: 12, color: Color(0xff68756e))),
-          if (kIsWeb && (webBackendUrl == null || webBackendUrl!.trim().isEmpty))
-            Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  final recipients = toController.text.split(RegExp(r'[,;]')).map((value) => value.trim()).where((value) => value.isNotEmpty).toList();
-                  final valid = recipients.isNotEmpty && recipients.every((value) => RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value));
-                  if (!valid) {
-                    refreshDialog(() => errorText = 'Enter a valid email address.');
-                    return;
-                  }
-                  final details = {
-                    'to': recipients.join(','),
-                    'subject': subjectController.text.trim(),
-                    'body': bodyController.text.trim(),
-                  };
-                  final safeName = controllers['name']!.text.trim().replaceAll(RegExp(r'[^A-Za-z0-9_-]+'), '_').replaceAll(RegExp(r'^_+|_+$'), '');
-                  final fileName = '${safeName.isEmpty ? 'Resume' : safeName}_Resume.pdf';
-                  browserShareTask = _shareResumeInBrowser(preparedWebPdf!, fileName, details);
-                  Navigator.pop(dialogContext, details);
-                },
-                icon: const Icon(Icons.attach_file),
-                label: const Text('Share with attachment'),
-              ),
-            ),
+          const Text('Open Gmail draft opens a new tab with the recipient, subject and message. The PDF downloads for you to attach; Chrome does not allow a web app to attach it to the draft automatically. Configure the backend to send with the PDF attached.', style: TextStyle(fontSize: 12, color: Color(0xff68756e))),
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
@@ -2103,7 +2129,7 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
             if (kIsWeb && (webBackendUrl == null || webBackendUrl!.trim().isEmpty)) {
               final safeName = controllers['name']!.text.trim().replaceAll(RegExp(r'[^A-Za-z0-9_-]+'), '_').replaceAll(RegExp(r'^_+|_+$'), '');
               final fileName = '${safeName.isEmpty ? 'Resume' : safeName}_Resume.pdf';
-              browserShareTask = _openGmailDraftWithDownloadedResume(preparedWebPdf!, fileName, details);
+              webEmailTask = _openGmailDraftWithDownloadedResume(preparedWebPdf!, fileName, details);
             }
             Navigator.pop(dialogContext, details);
           },
@@ -2122,8 +2148,8 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
     subjectController.dispose();
     bodyController.dispose();
     if (details != null && mounted) {
-      if (browserShareTask != null) {
-        await browserShareTask;
+      if (webEmailTask != null) {
+        await webEmailTask;
       } else {
         await _sendResumeEmail(details);
       }
@@ -2172,20 +2198,6 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
     tokenController.dispose();
   }
 
-  Future<void> _shareResumeInBrowser(
-    Uint8List pdfBytes,
-    String fileName,
-    Map<String, String> details,
-  ) {
-    final shareRequest = browser_file_share.sharePdfFile(
-      pdfBytes,
-      fileName: fileName,
-      subject: details['subject'] ?? '',
-      body: details['body'] ?? '',
-    );
-    return _finishBrowserResumeShare(shareRequest, pdfBytes, fileName, details);
-  }
-
   Future<void> _openGmailDraftWithDownloadedResume(
     Uint8List pdfBytes,
     String fileName,
@@ -2217,60 +2229,6 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
           SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
         );
       }
-    }
-  }
-
-  Future<void> _finishBrowserResumeShare(
-    Future<bool> shareRequest,
-    Uint8List pdfBytes,
-    String fileName,
-    Map<String, String> details,
-  ) async {
-    var shared = false;
-    try {
-      shared = await shareRequest;
-    } catch (error) {
-      if (error.toString().toLowerCase().contains('abort')) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Resume sharing was cancelled.')),
-          );
-        }
-        return;
-      }
-    }
-    if (shared) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Share sheet opened with the PDF and email details. Choose your email app and review before sending.')),
-        );
-      }
-      return;
-    }
-    await _openDownloadedResumeEmail(pdfBytes, fileName, details);
-  }
-
-  Future<void> _openDownloadedResumeEmail(
-    Uint8List pdfBytes,
-    String fileName,
-    Map<String, String> details,
-  ) async {
-    await Printing.sharePdf(bytes: pdfBytes, filename: fileName);
-    final recipients = (details['to'] ?? '').split(',').map((value) => value.trim()).where((value) => value.isNotEmpty).toList();
-    final mailto = Uri(
-      scheme: 'mailto',
-      path: recipients.join(','),
-      queryParameters: {
-        'subject': details['subject'] ?? '',
-        'body': details['body'] ?? '',
-      },
-    );
-    final opened = await launchUrl(mailto, mode: LaunchMode.externalApplication);
-    if (!opened) throw Exception('This browser cannot attach files to an email draft. The PDF was downloaded; attach it manually or configure the email backend.');
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This browser could not attach the PDF automatically. The PDF was downloaded and the draft opened; attach it before sending.')),
-      );
     }
   }
 
@@ -2418,7 +2376,7 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
         ]),
       ];
       final storeLines = project ? lines.skip(1).where(_isProjectStoreLine).toList() : <String>[];
-      final storeTokens = project ? _projectStoreTokensForEntry(title, storeLines, entryText: lines.skip(1).join(' ')) : <({String platform, String name})>[];
+      final storeTokens = project ? _projectStoreTokensForEntry(title, storeLines, entryText: lines.skip(1).join(' ')) : <({String platform, String name, String? url})>[];
       if (storeTokens.isNotEmpty) content.add(_pdfProjectStoreRow(storeTokens, regular, bold));
       for (final line in lines.skip(1)) {
         if (project && _isProjectStoreLine(line)) continue;
@@ -2468,10 +2426,9 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
     ]));
   }
 
-  pw.Widget _pdfProjectStoreRow(List<({String platform, String name})> links, pw.Font regular, pw.Font bold) {
+  pw.Widget _pdfProjectStoreRow(List<({String platform, String name, String? url})> links, pw.Font regular, pw.Font bold) {
     final children = <pw.Widget>[];
-    final availableLinks = links.where((link) => _projectUrl(link.name, link.platform) != null).toList();
-    if (availableLinks.isEmpty) return pw.SizedBox.shrink();
+    final availableLinks = links;
     for (final platform in ['Play Store', 'App Store']) {
       final platformLinks = availableLinks.where((link) => link.platform == platform).toList();
       if (platformLinks.isEmpty) continue;
@@ -2491,7 +2448,7 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
           decoration: pw.TextDecoration.underline,
           decorationColor: PdfColor.fromInt(0xff414141),
         ));
-        final url = _projectUrl(link.name, platform);
+        final url = link.url ?? _projectUrl(link.name, platform);
         children.add(url == null ? label : pw.UrlLink(destination: url, child: label));
       }
     }
@@ -2889,10 +2846,9 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
     return widgets;
   }
 
-  Widget _previewProjectStoreRow(List<({String platform, String name})> links) {
+  Widget _previewProjectStoreRow(List<({String platform, String name, String? url})> links) {
     final children = <Widget>[];
-    final availableLinks = links.where((link) => _projectUrl(link.name, link.platform) != null).toList();
-    if (availableLinks.isEmpty) return const SizedBox.shrink();
+    final availableLinks = links;
     for (final platform in ['Play Store', 'App Store']) {
       final platformLinks = availableLinks.where((link) => link.platform == platform).toList();
       if (platformLinks.isEmpty) continue;
@@ -2906,9 +2862,9 @@ If none of the allowlisted names have a known store URL, return {"projectLinks":
       for (var i = 0; i < platformLinks.length; i++) {
         if (i > 0) children.add(Text(', ', style: TextStyle(fontFamily: 'serif', fontSize: style.descriptionSize)));
         final link = platformLinks[i];
-        final url = _projectUrl(link.name, platform);
+        final url = link.url ?? _projectUrl(link.name, platform);
         children.add(url == null
-            ? Text(link.name, style: TextStyle(fontFamily: 'serif', fontSize: style.descriptionSize, decoration: TextDecoration.underline))
+            ? Text(_projectStoreDisplayName(link.name, platform), style: TextStyle(fontFamily: 'serif', fontSize: style.descriptionSize, decoration: TextDecoration.underline))
             : _previewLink(_projectStoreDisplayName(link.name, platform), url));
       }
     }
